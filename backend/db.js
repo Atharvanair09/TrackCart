@@ -23,7 +23,21 @@ if (process.env.DATABASE_URL) {
     port: process.env.DB_PORT || 5432,
   };
 }
+
+// --- Safe diagnostic logging (no secrets) ---
+if (process.env.DATABASE_URL) {
+  try {
+    const dbUrl = new URL(process.env.DATABASE_URL);
+    console.log(`[db] Using DATABASE_URL — host: ${dbUrl.hostname}, port: ${dbUrl.port || 5432}, database: ${dbUrl.pathname.slice(1)}`);
+  } catch (e) {
+    console.error('[db] DATABASE_URL is set but is not a valid URL:', e.message);
+  }
+} else {
+  console.log(`[db] Using individual env vars — host: ${poolConfig.host}, port: ${poolConfig.port}, database: ${poolConfig.database}`);
+}
+
 const pool = new Pool(poolConfig);
+
 
 async function initDb() {
   const client = await pool.connect();
