@@ -25,15 +25,30 @@ if (process.env.DATABASE_URL) {
 }
 
 // --- Safe diagnostic logging (no secrets) ---
+{
+  const dotenvResult = require('dotenv').config();
+  if (dotenvResult.error) {
+    console.log('[db] dotenv: no .env file loaded (expected in production)');
+  } else {
+    console.log(`[db] dotenv: loaded .env with keys: ${Object.keys(dotenvResult.parsed || {}).join(', ')}`);
+  }
+}
+
 if (process.env.DATABASE_URL) {
   try {
     const dbUrl = new URL(process.env.DATABASE_URL);
-    console.log(`[db] Using DATABASE_URL — host: ${dbUrl.hostname}, port: ${dbUrl.port || 5432}, database: ${dbUrl.pathname.slice(1)}`);
+    const host = dbUrl.hostname;
+    console.log(`[db] DATABASE_URL is set (length=${process.env.DATABASE_URL.length})`);
+    console.log(`[db] Parsed hostname: "${host}", port: ${dbUrl.port || 5432}, database: "${dbUrl.pathname.slice(1)}"`);
+    if (!host.includes('.')) {
+      console.error(`[db] WARNING: hostname "${host}" has no domain suffix — this is a Render internal ID that only resolves within Render's private network. Use the External Database URL if your service cannot reach it.`);
+    }
   } catch (e) {
     console.error('[db] DATABASE_URL is set but is not a valid URL:', e.message);
   }
 } else {
-  console.log(`[db] Using individual env vars — host: ${poolConfig.host}, port: ${poolConfig.port}, database: ${poolConfig.database}`);
+  console.log(`[db] DATABASE_URL is NOT set — using individual env vars`);
+  console.log(`[db] host: ${poolConfig.host}, port: ${poolConfig.port}, database: ${poolConfig.database}`);
 }
 
 const pool = new Pool(poolConfig);
