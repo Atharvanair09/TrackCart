@@ -1,13 +1,29 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'smart_cart',
-  password: process.env.DB_PASSWORD || 'password',
-  port: process.env.DB_PORT || 5432,
-});
+// Build pool configuration.
+// In production (Render), DATABASE_URL is set as a single connection string.
+// In local development, individual DB_* env vars are used.
+let poolConfig;
+if (process.env.DATABASE_URL) {
+  poolConfig = {
+    connectionString: process.env.DATABASE_URL,
+    // Render's managed PostgreSQL requires SSL.
+    // rejectUnauthorized: false is necessary for Render's self-signed certificates.
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  };
+} else {
+  poolConfig = {
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'smart_cart',
+    password: process.env.DB_PASSWORD || 'password',
+    port: process.env.DB_PORT || 5432,
+  };
+}
+const pool = new Pool(poolConfig);
 
 async function initDb() {
   const client = await pool.connect();

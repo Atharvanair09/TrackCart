@@ -6,7 +6,13 @@ const rfidRoutes = require('./routes/rfid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// CORS configuration.
+// In production, set CORS_ORIGIN to the deployed frontend URL.
+// In local development, all origins are allowed by default.
+const corsOptions = process.env.CORS_ORIGIN
+  ? { origin: process.env.CORS_ORIGIN }
+  : {};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
@@ -17,7 +23,8 @@ app.use('/api/sessions', sessionRoutes);
 // Database initialization
 initDb().then(() => {
   if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
+    // Bind to 0.0.0.0 so Render's reverse proxy can reach the server.
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });
   }
