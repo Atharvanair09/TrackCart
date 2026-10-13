@@ -4,12 +4,13 @@ const { pool } = require('../db');
 
 // POST /api/rfid/events
 router.post('/events', async (req, res) => {
-  const { deviceId, tagUid, event } = req.body;
+  const { deviceId, tagUid } = req.body;
 
   // 1 & 2. Validate request & device ID
   if (!deviceId || typeof deviceId !== 'string' || deviceId.trim() === '') {
     return res.status(400).json({ error: 'Missing or invalid deviceId' });
   }
+  const trimmedDeviceId = deviceId.trim();
 
   if (!tagUid || typeof tagUid !== 'string' || tagUid.trim() === '') {
     return res.status(400).json({ error: 'Missing or invalid tagUid' });
@@ -29,7 +30,7 @@ router.post('/events', async (req, res) => {
     const recentEvent = await client.query(`
       SELECT * FROM rfid_events_log 
       WHERE device_id = $1 AND tag_uid = $2 AND scanned_at >= NOW() - INTERVAL '5 seconds'
-    `, [deviceId, normalizedUid]);
+    `, [trimmedDeviceId, normalizedUid]);
 
     if (recentEvent.rows.length > 0) {
       await client.query('ROLLBACK');
@@ -39,10 +40,15 @@ router.post('/events', async (req, res) => {
     // Log the event
     await client.query(`
       INSERT INTO rfid_events_log (device_id, tag_uid) VALUES ($1, $2)
-    `, [deviceId, normalizedUid]);
+    `, [trimmedDeviceId, normalizedUid]);
 
-    // Validate Device -> Cart
-    const cartResult = await client.query('SELECT cart_id FROM carts WHERE device_id = $1', [deviceId]);
+    // Resolve firmware deviceId to a cart. Firmware DEVICE_ID (e.g. cart-001)
+    // is carts.device_id; the PWA session is keyed by carts.cart_id (e.g. CART_01).
+    const cartResult = await client.query(
+      `SELECT cart_id FROM carts
+       WHERE LOWER(device_id) = LOWER($1) OR LOWER(cart_id) = LOWER($1)`,
+      [trimmedDeviceId]
+    );
     if (cartResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Device is not associated with any cart' });
@@ -61,7 +67,10 @@ router.post('/events', async (req, res) => {
     const sessionId = sessionResult.rows[0].session_id;
 
     // Look up product
-    const productResult = await client.query('SELECT * FROM products WHERE tag_uid = $1', [normalizedUid]);
+    const productResult = await client.query(
+      'SELECT * FROM products WHERE UPPER(REPLACE(tag_uid, \':\', \'\')) = $1',
+      [normalizedUid]
+    );
     if (productResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Unregistered RFID tag' });

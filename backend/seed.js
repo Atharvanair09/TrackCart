@@ -40,14 +40,9 @@ const seedUser = {
 
 const seedCart = {
   cart_id: 'CART_01',
-  device_id: 'DEV_ESP8266_01',
-  status: 'active'
-};
-
-const seedSession = {
-  session_id: 'SESS_1001',
-  user_id: 'USER123',
-  cart_id: 'CART_01',
+  // Must match firmware/esp8266-rfid/src/config.h DEVICE_ID so RFID events
+  // resolve to the same cart the PWA pairs as CART_01.
+  device_id: 'cart-001',
   status: 'active'
 };
 
@@ -83,10 +78,9 @@ async function seed() {
       INSERT INTO carts (cart_id, device_id, status) VALUES ($1, $2, $3)
     `, [seedCart.cart_id, seedCart.device_id, seedCart.status]);
 
-    console.log('Inserting seed session...');
-    await client.query(`
-      INSERT INTO shopping_sessions (session_id, user_id, cart_id, status) VALUES ($1, $2, $3, $4)
-    `, [seedSession.session_id, seedSession.user_id, seedSession.cart_id, seedSession.status]);
+    // Do not seed an active shopping session. RFID events attach to the
+    // session the PWA creates for CART_01; a leftover seed session would
+    // either block pairing (409) or receive items the PWA is not polling.
 
     console.log('Seeding completed successfully!');
   } catch (error) {

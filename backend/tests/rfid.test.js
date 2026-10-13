@@ -173,6 +173,34 @@ describe('POST /api/rfid/events', () => {
     expect(res.body.items).toHaveLength(1);
   });
 
+  test('should resolve cart by firmware device_id (cart-001 -> CART_01)', async () => {
+    const res = await request(app)
+      .post('/api/rfid/events')
+      .send({ deviceId: 'cart-001', tagUid: '12500123456' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cart.cartId).toBe('CART_01');
+    expect(res.body.session.sessionId).toBe('SESS_1001');
+
+    const cartLookup = mockClient.query.mock.calls.find(
+      ([sql]) => typeof sql === 'string' && sql.includes('FROM carts')
+    );
+    expect(cartLookup).toBeDefined();
+    expect(cartLookup[0]).toMatch(/LOWER\(device_id\)/i);
+    expect(cartLookup[0]).toMatch(/LOWER\(cart_id\)/i);
+    expect(cartLookup[1]).toEqual(['cart-001']);
+  });
+
+  test('should resolve cart by PWA cart_id when firmware sends CART_01', async () => {
+    const res = await request(app)
+      .post('/api/rfid/events')
+      .send({ deviceId: 'CART_01', tagUid: '12:50:01:23:45:6' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cart.cartId).toBe('CART_01');
+    expect(res.body.product.productId).toBe('PROD001');
+  });
+
   test('should return 200 and increment quantity for duplicate product', async () => {
     // Setup mock to simulate item already in cart
     mockClient.query.mockImplementation((queryText, params) => {
