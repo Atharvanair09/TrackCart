@@ -10,6 +10,7 @@
   --status-active: #000000;
   --font-tech: 'Space Mono', 'Consolas', 'Courier New', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --header-height: 80px; /* global-hud-bar (~30px) + top-nav (48px) + borders */
 }
 
 * {
@@ -20,26 +21,21 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #111111;
+  background-color: var(--bg-main);
   color: var(--text-dark);
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
 }
 
 #app {
   width: 100%;
-  max-width: 440px;
   min-height: 100vh;
+  min-height: 100dvh;
   background-color: var(--bg-main);
   display: flex;
   flex-direction: column;
   position: relative;
-  border-left: 2px solid #000;
-  border-right: 2px solid #000;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
   overflow-x: hidden;
 }
 
@@ -57,7 +53,9 @@ body {
 .mt-6 { margin-top: 1.5rem; }
 .p-8 { padding: 2rem; }
 
-/* Global Top HUD Header */
+/* ===========================
+   Global Top HUD Header
+   =========================== */
 .global-hud-bar {
   background-color: var(--bg-dark);
   color: var(--text-light);
@@ -70,6 +68,7 @@ body {
   align-items: center;
   border-bottom: 2px solid var(--border-dark);
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .hud-bar-left .hud-sep {
@@ -77,15 +76,21 @@ body {
   margin: 0 4px;
 }
 
-/* Screen base styling */
+/* ===========================
+   Screen base styling
+   =========================== */
 .screen {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 16px;
   gap: 12px;
-  padding-bottom: 70px; /* space for bottom nav bar */
+  padding-bottom: 74px; /* space for bottom nav bar on mobile */
   animation: hudFade 0.2s ease-in-out;
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 @keyframes hudFade {
@@ -93,7 +98,9 @@ body {
   to { opacity: 1; }
 }
 
-/* Badges & Pills */
+/* ===========================
+   Badges & Pills
+   =========================== */
 .hud-badge {
   font-family: var(--font-tech);
   font-size: 0.7rem;
@@ -122,9 +129,12 @@ body {
   font-weight: 700;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border-dark);
+  flex-shrink: 0;
 }
 
-/* HOME VIEW STYLES */
+/* ===========================
+   HOME VIEW STYLES
+   =========================== */
 .hud-title-block {
   display: flex;
   flex-direction: column;
@@ -173,6 +183,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 .schematic-header {
@@ -183,6 +195,7 @@ body {
   color: #555;
   border-bottom: 1px dashed #ccc;
   padding-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .schematic-body {
@@ -190,6 +203,8 @@ body {
   justify-content: center;
   align-items: center;
   padding: 10px 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .cart-diagram-svg {
@@ -202,6 +217,7 @@ body {
   justify-content: space-between;
   border-top: 1px dashed #ccc;
   padding-top: 6px;
+  flex-shrink: 0;
 }
 
 .status-chip {
@@ -213,10 +229,11 @@ body {
   border: 1px solid #000;
 }
 
+/* Steps / Features list */
 .hud-steps-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
+  grid-template-columns: 1fr;
 }
 
 .step-item {
@@ -315,13 +332,215 @@ body {
   letter-spacing: -0.2px;
 }
 
-/* 2. QR SCANNER VIEW STYLES */
+/* ===========================
+   Connection Info Panel (Home)
+   =========================== */
+.connection-info-panel {
+  background: #ffffff;
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-tech);
+}
+
+.conn-panel-header {
+  background: #000;
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.conn-panel-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conn-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 0;
+  border-bottom: 1px dashed #ddd;
+}
+
+.conn-row:last-child {
+  border-bottom: none;
+}
+
+.conn-row .conn-label {
+  color: #555;
+}
+
+.conn-row .conn-value {
+  color: #000;
+}
+
+.conn-row .conn-value.status-idle {
+  color: #888;
+}
+
+.conn-row .conn-value.status-ready {
+  color: #000;
+}
+
+/* Next Step Callout */
+.next-step-callout {
+  background: #f0f0f0;
+  border: 1.5px solid #000;
+  padding: 10px 12px;
+  font-family: var(--font-tech);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.next-step-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.next-step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.next-step-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #000;
+}
+
+.next-step-desc {
+  font-size: 0.68rem;
+  color: #555;
+  line-height: 1.35;
+}
+
+/* Hardware Status Panel */
+.hw-status-panel {
+  background: #fff;
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-tech);
+}
+
+.hw-panel-header {
+  background: #000;
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hw-panel-body {
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hw-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+}
+
+.hw-indicator-label {
+  font-size: 0.65rem;
+  color: #888;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.hw-indicator-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #000;
+}
+
+.hw-indicator-value.hw-idle {
+  color: #aaa;
+}
+
+.hw-indicator-value.hw-ready {
+  color: #000;
+}
+
+/* Cart Summary Mini-Panel (Home) */
+.cart-summary-mini {
+  background: #fff;
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-tech);
+}
+
+.cart-mini-header {
+  background: #000;
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cart-mini-body {
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cart-mini-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cart-mini-stat .stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.cart-mini-stat .stat-label {
+  font-size: 0.65rem;
+  color: #888;
+  font-weight: 700;
+}
+
+.cart-mini-divider {
+  width: 1px;
+  height: 36px;
+  background: #ddd;
+}
+
+/* ===========================
+   2. QR SCANNER VIEW STYLES
+   =========================== */
 .hud-nav-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 2px solid #000;
   padding-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .nav-header-title h2 {
@@ -614,7 +833,9 @@ body {
   border-top: 1px dashed #999;
 }
 
-/* 3. CART LEDGER VIEW STYLES */
+/* ===========================
+   3. CART LEDGER VIEW STYLES
+   =========================== */
 .cart-status-bar {
   background: #000000;
   color: #ffffff;
@@ -622,6 +843,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .status-bar-line1, .status-bar-line2 {
@@ -652,6 +874,7 @@ body {
   justify-content: space-between;
   align-items: center;
   font-size: 0.75rem;
+  flex-shrink: 0;
 }
 
 .optical-info {
@@ -686,7 +909,7 @@ body {
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
-  max-height: 300px;
+  max-height: 400px;
 }
 
 .cart-item-card {
@@ -852,7 +1075,7 @@ body {
 .grand-total {
   font-size: 1.2rem;
   font-weight: 700;
-  border-top: 1.5px stroke #000;
+  border-top: 1.5px solid #000;
   padding-top: 4px;
   margin-top: 4px;
 }
@@ -900,25 +1123,30 @@ body {
   text-align: center;
 }
 
-/* Shared Bottom Navigation Tab Bar */
+/* ===========================
+   Bottom Navigation Tab Bar (Mobile/Tablet)
+   Consistently black background with white text.
+   Active tab uses a white top border indicator.
+   =========================== */
 .hud-bottom-nav {
-  position: absolute;
+  position: fixed;
   bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0px);
   left: 0;
   right: 0;
   height: 54px;
-  background: #ffffff;
-  border-top: 2px solid #000000;
+  background: #000000;
+  border-top: 2px solid #333333;
   display: flex;
-  z-index: 10;
+  z-index: 100;
 }
 
 .nav-tab {
   flex: 1;
-  background: #ffffff;
-  color: #000000;
+  background: #000000;
+  color: #999999;
   border: none;
-  border-right: 1px solid #000000;
+  border-top: 3px solid transparent;
   font-family: var(--font-tech);
   font-size: 0.72rem;
   font-weight: 700;
@@ -927,17 +1155,74 @@ body {
   justify-content: center;
   gap: 4px;
   cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 
-.nav-tab:last-child {
-  border-right: none;
+.nav-tab:focus,
+.nav-tab:active {
+  background: #000000;
+  outline: none;
 }
 
 .nav-tab.active {
   background: #000000;
   color: #ffffff;
+  border-top-color: #ffffff;
 }
 
+/* ===========================
+   Desktop Top Navigation Bar
+   =========================== */
+.hud-top-nav {
+  display: none;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: #000000;
+  border-bottom: 2px solid #333333;
+  z-index: 100;
+  align-items: center;
+  padding: 0 24px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.hud-top-nav .nav-tab {
+  flex: none;
+  padding: 0 24px;
+  height: 100%;
+  font-size: 0.78rem;
+  border-top: none;
+  border-bottom: 3px solid transparent;
+  border-right: 1px solid #222;
+}
+
+.hud-top-nav .nav-tab.active {
+  border-bottom-color: #ffffff;
+  border-top-color: transparent;
+}
+
+.hud-top-nav .nav-tab:last-child {
+  border-right: none;
+}
+
+.desktop-nav-brand {
+  font-family: var(--font-tech);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-right: 32px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+/* ===========================
+   Loading & Completed screens
+   =========================== */
 .hud-spinner {
   width: 36px;
   height: 36px;
@@ -953,6 +1238,7 @@ body {
   border: 2px solid #000000;
   margin: auto;
   width: 100%;
+  max-width: 500px;
 }
 
 .success-icon-box {
@@ -971,4 +1257,246 @@ body {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ===========================
+   Home screen dashboard grid wrapper
+   =========================== */
+.home-dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-dashboard-grid .home-col-primary,
+.home-dashboard-grid .home-col-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Cart screen layout wrapper */
+.cart-dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cart-dashboard-grid .cart-col-left,
+.cart-dashboard-grid .cart-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Scanner screen layout wrapper */
+.scanner-dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scanner-dashboard-grid .scanner-col-left,
+.scanner-dashboard-grid .scanner-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ===========================
+   RESPONSIVE: Tablet (768px+)
+   =========================== */
+@media (min-width: 768px) {
+  .screen {
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .hud-steps-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .title-row h1 {
+    font-size: 3rem;
+  }
+
+  .scanner-viewport-wrapper {
+    height: 320px;
+  }
+
+  .cart-ledger-list {
+    max-height: 500px;
+  }
+
+  /* Home: 2-column layout */
+  .home-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* Scanner: 2-column layout */
+  .scanner-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* Cart: 2-column layout */
+  .cart-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+}
+
+/* ===========================
+   RESPONSIVE: Desktop (1024px+)
+   =========================== */
+@media (min-width: 1024px) {
+  /* Hide mobile bottom nav, show desktop top nav */
+  .hud-bottom-nav {
+    display: none;
+  }
+
+  .hud-top-nav {
+    display: flex;
+  }
+
+  .screen {
+    padding: 24px 32px;
+    padding-bottom: 24px; /* No bottom nav padding on desktop */
+    gap: 16px;
+  }
+
+  /* ---- Viewport-filling home screen ---- */
+  #home-screen {
+    min-height: calc(100vh - var(--header-height));
+    min-height: calc(100dvh - var(--header-height));
+  }
+
+  .home-dashboard-grid {
+    grid-template-columns: 57fr 43fr;
+    gap: 24px;
+    flex: 1;
+    align-items: stretch;
+  }
+
+  .home-col-primary {
+    justify-content: flex-start;
+  }
+
+  .home-col-secondary {
+    justify-content: flex-start;
+  }
+
+  /* Enlarge cart schematic on desktop */
+  .hud-schematic-card {
+    flex: 1;
+    min-height: 200px;
+  }
+
+  .cart-diagram-svg {
+    max-height: 200px;
+  }
+
+  .title-row h1 {
+    font-size: 2.8rem;
+  }
+
+  /* Steps list stays 3 columns but tighter on desktop */
+  .hud-steps-list {
+    grid-template-columns: 1fr;
+  }
+
+  .scanner-viewport-wrapper {
+    height: 400px;
+  }
+
+  .cart-ledger-list {
+    max-height: none;
+  }
+
+  /* Scanner: better proportions */
+  .scanner-dashboard-grid {
+    grid-template-columns: 1.5fr 1fr;
+    gap: 24px;
+  }
+
+  /* Cart: wider items list vs footer */
+  .cart-dashboard-grid {
+    grid-template-columns: 1.5fr 1fr;
+    gap: 24px;
+    flex: 1;
+    align-items: stretch;
+  }
+
+  .cart-col-left {
+    justify-content: flex-start;
+  }
+
+  .cart-col-right {
+    justify-content: flex-start;
+  }
+
+  #cart-screen {
+    min-height: calc(100vh - var(--header-height));
+    min-height: calc(100dvh - var(--header-height));
+  }
+
+  .cart-item-card {
+    padding: 14px;
+  }
+
+  /* Cart ledger footer sticks to top of right column */
+  .cart-ledger-footer {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  /* Hardware status panel: 2x2 grid on desktop */
+  .hw-panel-body {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ===========================
+   RESPONSIVE: Wide Desktop (1440px+)
+   =========================== */
+@media (min-width: 1440px) {
+  .screen {
+    padding: 28px 48px;
+  }
+
+  .home-dashboard-grid {
+    gap: 32px;
+  }
+
+  .scanner-dashboard-grid {
+    gap: 32px;
+  }
+
+  .cart-dashboard-grid {
+    gap: 32px;
+  }
+
+  .title-row h1 {
+    font-size: 3.2rem;
+  }
+
+  .cart-diagram-svg {
+    max-height: 240px;
+  }
+}
+
+/* ===========================
+   RESPONSIVE: Ultra-wide (1920px+)
+   =========================== */
+@media (min-width: 1920px) {
+  .screen {
+    padding: 32px 60px;
+  }
 }

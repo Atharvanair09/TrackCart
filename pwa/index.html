@@ -2,8 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Smart Shopping Cart // Hardware Interface</title>
+    <meta name="description" content="Smart Shopping Cart PWA — scan, shop, and verify with real-time hardware interface.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -27,6 +28,23 @@
         </div>
       </header>
 
+      <!-- Desktop Top Navigation Bar (visible >= 1024px) -->
+      <nav id="top-tab-bar" class="hud-top-nav font-mono">
+        <span class="desktop-nav-brand">SMART_CART //</span>
+        <button class="nav-tab active" data-target="cart">
+          <span class="tab-icon">🛒</span> TALLY
+        </button>
+        <button class="nav-tab" data-target="scanner">
+          <span class="tab-icon">📷</span> SCAN
+        </button>
+        <button class="nav-tab" data-target="home">
+          <span class="tab-icon">⚖</span> TARE
+        </button>
+        <button class="nav-tab" data-target="home">
+          <span class="tab-icon">💳</span> CART
+        </button>
+      </nav>
+
       <!-- Loading Screen -->
       <div id="loading-screen" class="screen">
         <div class="hud-box text-center p-8">
@@ -42,100 +60,188 @@
           <span id="home-connection-status" class="hud-badge status-standby">STANDBY</span>
         </div>
 
-        <div class="hud-title-block">
-          <div class="title-row">
-            <h1>SMART</h1>
-            <span class="hud-pill">[SYS]</span>
-          </div>
-          <div class="title-row">
-            <h1>SHOPPING</h1>
-            <span class="hud-pill">[PHYS]</span>
-          </div>
-          <div class="title-row">
-            <h1>CART</h1>
-            <span class="hud-pill">[AUTO]</span>
-          </div>
-        </div>
+        <div class="home-dashboard-grid">
+          <div class="home-col-primary">
+            <div class="hud-title-block">
+              <div class="title-row">
+                <h1>SMART</h1>
+                <span class="hud-pill">[SYS]</span>
+              </div>
+              <div class="title-row">
+                <h1>SHOPPING</h1>
+                <span class="hud-pill">[PHYS]</span>
+              </div>
+              <div class="title-row">
+                <h1>CART</h1>
+                <span class="hud-pill">[AUTO]</span>
+              </div>
+            </div>
 
-        <div class="hud-meta-row">
-          <span class="meta-tag">SCAN. SHOP. VERIFY.</span>
-          <span class="meta-tag right">0.05 LATENCY</span>
-        </div>
+            <div class="hud-meta-row">
+              <span class="meta-tag">SCAN. SHOP. VERIFY.</span>
+              <span class="meta-tag right">0.05 LATENCY</span>
+            </div>
 
-        <!-- Technical Schematic Illustration Box -->
-        <div class="hud-schematic-card">
-          <div class="schematic-header">
-            <span>POS: X44 Y12</span>
-            <span>GRID: 10MM</span>
-          </div>
-          <div class="schematic-body">
-            <svg class="cart-diagram-svg" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Grid lines -->
-              <line x1="0" y1="80" x2="300" y2="80" stroke="#cccccc" stroke-dasharray="3 3" />
-              <line x1="150" y1="0" x2="150" y2="160" stroke="#cccccc" stroke-dasharray="3 3" />
-              
-              <!-- Cart Frame -->
-              <path d="M40 30 L70 30 L100 110 L240 110 L260 40 L80 40" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-              <!-- Cart Basket Grid -->
-              <path d="M100 60 L254 60 M100 85 L247 85 M120 40 L135 110 M160 40 L170 110 M200 40 L205 110 M230 40 L235 110" stroke="#000" stroke-width="1.5" opacity="0.6"/>
-              <!-- Wheels -->
-              <rect x="95" y="112" width="16" height="16" fill="#fff" stroke="#000" stroke-width="2.5"/>
-              <rect x="225" y="112" width="16" height="16" fill="#fff" stroke="#000" stroke-width="2.5"/>
-              <circle cx="103" cy="120" r="3" fill="#000"/>
-              <circle cx="233" cy="120" r="3" fill="#000"/>
-              
-              <!-- Barcode inside cart -->
-              <rect x="135" y="65" width="4" height="25" fill="#000"/>
-              <rect x="142" y="65" width="2" height="25" fill="#000"/>
-              <rect x="147" y="65" width="6" height="25" fill="#000"/>
-              <rect x="156" y="65" width="3" height="25" fill="#000"/>
+            <!-- Main Connect Button -->
+            <button id="home-scan-btn" class="hud-btn-main">
+              <span class="btn-icon">📷</span>
+              <span class="btn-text-wrap">
+                <strong class="btn-title">CONNECT CART</strong>
+                <span class="btn-sub font-mono">INITIALIZE sess_forward</span>
+              </span>
+            </button>
 
-              <!-- Optical Cam Label Callout -->
-              <rect x="175" y="30" width="85" height="18" fill="#fff" stroke="#000" stroke-width="1.5"/>
-              <text x="180" y="43" font-family="Space Mono" font-size="9" font-weight="bold" fill="#000">OPTICAL_CAM_01</text>
-              <line x1="175" y1="39" x2="160" y2="65" stroke="#000" stroke-dasharray="2 2"/>
-            </svg>
-          </div>
-          <div class="schematic-footer">
-            <span class="status-chip">TARE CALIBRATED</span>
-            <span class="status-chip">OPTICAL_AI: ACTIVE</span>
-          </div>
-        </div>
+            <!-- Connection Info Panel -->
+            <div class="connection-info-panel">
+              <div class="conn-panel-header">
+                <span>CONNECTION_STATUS</span>
+                <span id="home-conn-state">IDLE</span>
+              </div>
+              <div class="conn-panel-body">
+                <div class="conn-row">
+                  <span class="conn-label">SESSION</span>
+                  <span id="home-session-display" class="conn-value status-idle">NO ACTIVE SESSION</span>
+                </div>
+                <div class="conn-row">
+                  <span class="conn-label">CART ID</span>
+                  <span id="home-cart-id-display" class="conn-value status-idle">—</span>
+                </div>
+                <div class="conn-row">
+                  <span class="conn-label">INITIALIZATION</span>
+                  <span id="home-init-display" class="conn-value status-idle">AWAITING SCAN</span>
+                </div>
+                <div class="conn-row">
+                  <span class="conn-label">API ENDPOINT</span>
+                  <span id="home-api-display" class="conn-value status-ready">REACHABLE</span>
+                </div>
+              </div>
+            </div>
 
-        <!-- Features list -->
-        <div class="hud-steps-list">
-          <div class="step-item">
-            <span class="step-num">01</span>
-            <span class="step-text">SCAN CART QR CODE</span>
-            <span class="step-code">qr_code_scanner</span>
-          </div>
-          <div class="step-item">
-            <span class="step-num">02</span>
-            <span class="step-text">DROP ITEMS DIRECTLY</span>
-            <span class="step-code">shopping_basket</span>
-          </div>
-          <div class="step-item">
-            <span class="step-num">03</span>
-            <span class="step-text">AUTO-WEIGH & WALK OUT</span>
-            <span class="step-code">contactless</span>
-          </div>
-        </div>
+            <!-- Next Step Callout -->
+            <div class="next-step-callout">
+              <span class="next-step-icon">→</span>
+              <div class="next-step-content">
+                <span class="next-step-title">NEXT: PAIR A PHYSICAL CART</span>
+                <span class="next-step-desc">Press CONNECT CART above, then scan the QR code on the cart's handlebar console — or enter the 6-digit cart ID manually.</span>
+              </div>
+            </div>
 
-        <!-- Main Connect Button -->
-        <button id="home-scan-btn" class="hud-btn-main">
-          <span class="btn-icon">📷</span>
-          <span class="btn-text-wrap">
-            <strong class="btn-title">CONNECT CART</strong>
-            <span class="btn-sub font-mono">INITIALIZE sess_forward</span>
-          </span>
-        </button>
-
-        <div class="hud-footer-info font-mono">
-          <div class="info-row">
-            <span>NO ACCOUNT // NO WAIT</span>
-            <span>INSTANT GUEST TICKET</span>
+            <!-- Cart Session Summary (hidden when no session) -->
+            <div id="home-cart-summary" class="cart-summary-mini">
+              <div class="cart-mini-header">CART SESSION SUMMARY</div>
+              <div class="cart-mini-body">
+                <div class="cart-mini-stat">
+                  <span id="home-item-count" class="stat-value">0</span>
+                  <span class="stat-label">ITEMS</span>
+                </div>
+                <div class="cart-mini-divider"></div>
+                <div class="cart-mini-stat">
+                  <span id="home-subtotal" class="stat-value">$0.00</span>
+                  <span class="stat-label">SUBTOTAL</span>
+                </div>
+                <div class="cart-mini-divider"></div>
+                <div class="cart-mini-stat">
+                  <span id="home-weight" class="stat-value">0.00</span>
+                  <span class="stat-label">KG</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="info-terminal-text">TERMINAL READY • SCAN CART HANDLE BARCODES TO ACTIVATE</p>
+
+          <div class="home-col-secondary">
+            <!-- Technical Schematic Illustration Box -->
+            <div class="hud-schematic-card">
+              <div class="schematic-header">
+                <span>POS: X44 Y12</span>
+                <span>GRID: 10MM</span>
+              </div>
+              <div class="schematic-body">
+                <svg class="cart-diagram-svg" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Grid lines -->
+                  <line x1="0" y1="80" x2="300" y2="80" stroke="#cccccc" stroke-dasharray="3 3" />
+                  <line x1="150" y1="0" x2="150" y2="160" stroke="#cccccc" stroke-dasharray="3 3" />
+                  
+                  <!-- Cart Frame -->
+                  <path d="M40 30 L70 30 L100 110 L240 110 L260 40 L80 40" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                  <!-- Cart Basket Grid -->
+                  <path d="M100 60 L254 60 M100 85 L247 85 M120 40 L135 110 M160 40 L170 110 M200 40 L205 110 M230 40 L235 110" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                  <!-- Wheels -->
+                  <rect x="95" y="112" width="16" height="16" fill="#fff" stroke="#000" stroke-width="2.5"/>
+                  <rect x="225" y="112" width="16" height="16" fill="#fff" stroke="#000" stroke-width="2.5"/>
+                  <circle cx="103" cy="120" r="3" fill="#000"/>
+                  <circle cx="233" cy="120" r="3" fill="#000"/>
+                  
+                  <!-- Barcode inside cart -->
+                  <rect x="135" y="65" width="4" height="25" fill="#000"/>
+                  <rect x="142" y="65" width="2" height="25" fill="#000"/>
+                  <rect x="147" y="65" width="6" height="25" fill="#000"/>
+                  <rect x="156" y="65" width="3" height="25" fill="#000"/>
+
+                  <!-- Optical Cam Label Callout -->
+                  <rect x="175" y="30" width="85" height="18" fill="#fff" stroke="#000" stroke-width="1.5"/>
+                  <text x="180" y="43" font-family="Space Mono" font-size="9" font-weight="bold" fill="#000">OPTICAL_CAM_01</text>
+                  <line x1="175" y1="39" x2="160" y2="65" stroke="#000" stroke-dasharray="2 2"/>
+                </svg>
+              </div>
+              <div class="schematic-footer">
+                <span class="status-chip">TARE CALIBRATED</span>
+                <span class="status-chip">OPTICAL_AI: ACTIVE</span>
+              </div>
+            </div>
+
+            <!-- Hardware Status Panel -->
+            <div class="hw-status-panel">
+              <div class="hw-panel-header">
+                <span>HARDWARE_DIAGNOSTICS</span>
+                <span>v2.6.0</span>
+              </div>
+              <div class="hw-panel-body">
+                <div class="hw-indicator">
+                  <span class="hw-indicator-label">RFID READER</span>
+                  <span id="hw-rfid-status" class="hw-indicator-value hw-idle">STANDBY</span>
+                </div>
+                <div class="hw-indicator">
+                  <span class="hw-indicator-label">OPTICAL CAM</span>
+                  <span id="hw-cam-status" class="hw-indicator-value hw-idle">STANDBY</span>
+                </div>
+                <div class="hw-indicator">
+                  <span class="hw-indicator-label">LOAD CELL</span>
+                  <span id="hw-load-status" class="hw-indicator-value hw-ready">0.00 KG</span>
+                </div>
+                <div class="hw-indicator">
+                  <span class="hw-indicator-label">TARE STATUS</span>
+                  <span id="hw-tare-status" class="hw-indicator-value hw-ready">CALIBRATED</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Features list -->
+            <div class="hud-steps-list">
+              <div class="step-item">
+                <span class="step-num">01</span>
+                <span class="step-text">SCAN CART QR CODE</span>
+                <span class="step-code">qr_code_scanner</span>
+              </div>
+              <div class="step-item">
+                <span class="step-num">02</span>
+                <span class="step-text">DROP ITEMS DIRECTLY</span>
+                <span class="step-code">shopping_basket</span>
+              </div>
+              <div class="step-item">
+                <span class="step-num">03</span>
+                <span class="step-text">AUTO-WEIGH & WALK OUT</span>
+                <span class="step-code">contactless</span>
+              </div>
+            </div>
+
+            <div class="hud-footer-info font-mono">
+              <div class="info-row">
+                <span>NO ACCOUNT // NO WAIT</span>
+                <span>INSTANT GUEST TICKET</span>
+              </div>
+              <p class="info-terminal-text">TERMINAL READY • SCAN CART HANDLE BARCODES TO ACTIVATE</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -152,87 +258,93 @@
           </div>
         </div>
 
-        <div class="scanner-alert-banner">
-          <div class="alert-top-line">
-            <span>SYS.LINK // OPTICAL-INGRESS</span>
-            <span id="scanner-status-tag" class="hud-badge status-online">■ ACTIVE</span>
+        <div class="scanner-dashboard-grid">
+          <div class="scanner-col-left">
+            <div class="scanner-alert-banner">
+              <div class="alert-top-line">
+                <span>SYS.LINK // OPTICAL-INGRESS</span>
+                <span id="scanner-status-tag" class="hud-badge status-online">■ ACTIVE</span>
+              </div>
+              <p class="alert-body font-mono">OPTICAL SCANNER ACTIVE // ALIGN RETICLE WITH CART QR CODE</p>
+            </div>
+
+            <div id="scanner-error" class="hud-error-msg hidden font-mono"></div>
+
+            <!-- Camera Viewport Section -->
+            <div class="scanner-viewport-wrapper">
+              <div class="scanner-corner corner-tl">┌</div>
+              <div class="scanner-corner corner-tr">┐</div>
+              <div class="scanner-corner corner-bl">└</div>
+              <div class="scanner-corner corner-br">┘</div>
+              
+              <div class="scanner-tag top-tag font-mono">CAM_PORT: 01 // 60FPS</div>
+              
+              <div id="webcam-preview" class="webcam-feed"></div>
+
+              <!-- Reticle Overlay -->
+              <div class="reticle-box">
+                <div class="reticle-qr-mock">
+                  <div class="qr-corner-sq sq-tl"></div>
+                  <div class="qr-corner-sq sq-tr"></div>
+                  <div class="qr-corner-sq sq-bl"></div>
+                  <div class="qr-center-cross">
+                    <span>YARD</span>
+                    <span>LOCK</span>
+                  </div>
+                </div>
+                <div class="scanner-line"></div>
+              </div>
+
+              <div class="scanner-tag bottom-tag font-mono">Z-AXIS: 1.04X</div>
+            </div>
+
+            <div class="scanner-status-strip font-mono">
+              <span>FPS: 60 // SENSOR: CALIBRATED // SEARCHIN... ■</span>
+            </div>
           </div>
-          <p class="alert-body font-mono">OPTICAL SCANNER ACTIVE // ALIGN RETICLE WITH CART QR CODE</p>
-        </div>
 
-        <div id="scanner-error" class="hud-error-msg hidden font-mono"></div>
-
-        <!-- Camera Viewport Section -->
-        <div class="scanner-viewport-wrapper">
-          <div class="scanner-corner corner-tl">┌</div>
-          <div class="scanner-corner corner-tr">┐</div>
-          <div class="scanner-corner corner-bl">└</div>
-          <div class="scanner-corner corner-br">┘</div>
-          
-          <div class="scanner-tag top-tag font-mono">CAM_PORT: 01 // 60FPS</div>
-          
-          <div id="webcam-preview" class="webcam-feed"></div>
-
-          <!-- Reticle Overlay -->
-          <div class="reticle-box">
-            <div class="reticle-qr-mock">
-              <div class="qr-corner-sq sq-tl"></div>
-              <div class="qr-corner-sq sq-tr"></div>
-              <div class="qr-corner-sq sq-bl"></div>
-              <div class="qr-center-cross">
-                <span>YARD</span>
-                <span>LOCK</span>
+          <div class="scanner-col-right">
+            <!-- Physical Schematic Helper -->
+            <div class="hud-schematic-helper">
+              <div class="helper-header font-mono">
+                <span>PHYSICAL SCHEMATIC // CART UNIT</span>
+                <span class="right">REF: SEC-C4</span>
+              </div>
+              <div class="helper-body">
+                <div class="schematic-mini-graphic font-mono">[ QR ]</div>
+                <p class="helper-text font-mono">QR code is located directly on the central alloy handlebar console next to the optical weighing display. POINT OPTICAL LENS AT ~20CM DISTANCE</p>
               </div>
             </div>
-            <div class="scanner-line"></div>
-          </div>
 
-          <div class="scanner-tag bottom-tag font-mono">Z-AXIS: 1.04X</div>
-        </div>
+            <!-- Control Action Row -->
+            <div class="scanner-controls-row">
+              <button id="toggle-torch-btn" class="hud-btn-secondary font-mono">🔦 TORCH: OFF</button>
+              <button id="abort-scan-btn" class="hud-btn-secondary font-mono">✕ ABORT</button>
+            </div>
 
-        <div class="scanner-status-strip font-mono">
-          <span>FPS: 60 // SENSOR: CALIBRATED // SEARCHIN... ■</span>
-        </div>
+            <!-- Manual Cart-ID Fallback Entry -->
+            <div class="manual-override-card">
+              <div class="override-header font-mono">
+                <span>OR ENTER 6-DIGIT CART IDENTIFIER:</span>
+                <span class="right">HEX-CODE</span>
+              </div>
+              
+              <div class="manual-input-row">
+                <input type="text" id="manual-cart-id" placeholder="CRT-8849" value="CART-001 font-mono" />
+                <button id="pair-cart-btn" class="hud-btn-dark font-mono">PAIR</button>
+              </div>
+              
+              <div class="override-footer font-mono">
+                <span>FORMAT: CRT-[0-9]{4}</span>
+                <span class="right">MANUAL OVERRIDE READY</span>
+              </div>
+            </div>
 
-        <!-- Physical Schematic Helper -->
-        <div class="hud-schematic-helper">
-          <div class="helper-header font-mono">
-            <span>PHYSICAL SCHEMATIC // CART UNIT</span>
-            <span class="right">REF: SEC-C4</span>
+            <div class="proximity-radar font-mono">
+              <span>PROXIMITY RADAR: 0.8M TO NEAREST UNIT</span>
+              <span class="radar-bars">▮▮▮</span>
+            </div>
           </div>
-          <div class="helper-body">
-            <div class="schematic-mini-graphic font-mono">[ QR ]</div>
-            <p class="helper-text font-mono">QR code is located directly on the central alloy handlebar console next to the optical weighing display. POINT OPTICAL LENS AT ~20CM DISTANCE</p>
-          </div>
-        </div>
-
-        <!-- Control Action Row -->
-        <div class="scanner-controls-row">
-          <button id="toggle-torch-btn" class="hud-btn-secondary font-mono">🔦 TORCH: OFF</button>
-          <button id="abort-scan-btn" class="hud-btn-secondary font-mono">✕ ABORT</button>
-        </div>
-
-        <!-- Manual Cart-ID Fallback Entry -->
-        <div class="manual-override-card">
-          <div class="override-header font-mono">
-            <span>OR ENTER 6-DIGIT CART IDENTIFIER:</span>
-            <span class="right">HEX-CODE</span>
-          </div>
-          
-          <div class="manual-input-row">
-            <input type="text" id="manual-cart-id" placeholder="CRT-8849" value="CART-001 font-mono" />
-            <button id="pair-cart-btn" class="hud-btn-dark font-mono">PAIR</button>
-          </div>
-          
-          <div class="override-footer font-mono">
-            <span>FORMAT: CRT-[0-9]{4}</span>
-            <span class="right">MANUAL OVERRIDE READY</span>
-          </div>
-        </div>
-
-        <div class="proximity-radar font-mono">
-          <span>PROXIMITY RADAR: 0.8M TO NEAREST UNIT</span>
-          <span class="radar-bars">▮▮▮</span>
         </div>
       </div>
 
@@ -271,50 +383,56 @@
 
         <div id="cart-error" class="hud-error-msg hidden font-mono"></div>
 
-        <!-- Empty State -->
-        <div id="empty-state" class="empty-ledger-state hidden font-mono">
-          <div class="empty-icon-box">[ EMPTY LEDGER ]</div>
-          <h3>CART SESSION ACTIVE</h3>
-          <p>NO ITEMS DETECTED IN BASKET</p>
-          <span class="subtext">Scan item barcodes or place products into cart.</span>
-        </div>
-
-        <!-- Items Ledger List -->
-        <ul id="cart-items" class="cart-ledger-list">
-          <!-- Item rows injected here -->
-        </ul>
-
-        <div class="tally-security-banner font-mono">
-          <span class="shield-icon">🛡</span>
-          <span>ALL SKUS LOCKED TO DUAL-ZONE INFRARED & STRAIN-GAUGE TALLY. REMOVAL REQUIRES SCAN REVERSAL.</span>
-        </div>
-
-        <!-- Ledger Totals & Checkout Panel -->
-        <div class="cart-ledger-footer">
-          <div class="totals-breakdown font-mono">
-            <div class="total-row">
-              <span>SUBTOTAL (<span id="total-items">0</span> ITEMS)</span>
-              <strong id="cart-subtotal">$0.00</strong>
+        <div class="cart-dashboard-grid">
+          <div class="cart-col-left">
+            <!-- Empty State -->
+            <div id="empty-state" class="empty-ledger-state hidden font-mono">
+              <div class="empty-icon-box">[ EMPTY LEDGER ]</div>
+              <h3>CART SESSION ACTIVE</h3>
+              <p>NO ITEMS DETECTED IN BASKET</p>
+              <span class="subtext">Scan item barcodes or place products into cart.</span>
             </div>
-            <div class="total-row">
-              <span>TAX (8.25%)</span>
-              <strong id="cart-tax">$0.00</strong>
-            </div>
-            <div class="total-row grand-total">
-              <span class="total-label">TOTAL DUE</span>
-              <h2 id="cart-total">$0.00</h2>
+
+            <!-- Items Ledger List -->
+            <ul id="cart-items" class="cart-ledger-list">
+              <!-- Item rows injected here -->
+            </ul>
+
+            <div class="tally-security-banner font-mono">
+              <span class="shield-icon">🛡</span>
+              <span>ALL SKUS LOCKED TO DUAL-ZONE INFRARED & STRAIN-GAUGE TALLY. REMOVAL REQUIRES SCAN REVERSAL.</span>
             </div>
           </div>
 
-          <button id="checkout-btn" class="hud-btn-checkout">
-            <span class="square-bullet">■</span>
-            <span class="btn-text">PROCEED TO INSTANT CHECKOUT</span>
-            <span id="checkout-total-badge" class="total-badge">[$0.00] -&gt;</span>
-          </button>
+          <div class="cart-col-right">
+            <!-- Ledger Totals & Checkout Panel -->
+            <div class="cart-ledger-footer">
+              <div class="totals-breakdown font-mono">
+                <div class="total-row">
+                  <span>SUBTOTAL (<span id="total-items">0</span> ITEMS)</span>
+                  <strong id="cart-subtotal">$0.00</strong>
+                </div>
+                <div class="total-row">
+                  <span>TAX (8.25%)</span>
+                  <strong id="cart-tax">$0.00</strong>
+                </div>
+                <div class="total-row grand-total">
+                  <span class="total-label">TOTAL DUE</span>
+                  <h2 id="cart-total">$0.00</h2>
+                </div>
+              </div>
 
-          <button id="disconnect-cart-btn" class="hud-btn-disconnect font-mono">
-            <span class="power-icon">⏻</span> DISCONNECT CART SESSION
-          </button>
+              <button id="checkout-btn" class="hud-btn-checkout">
+                <span class="square-bullet">■</span>
+                <span class="btn-text">PROCEED TO INSTANT CHECKOUT</span>
+                <span id="checkout-total-badge" class="total-badge">[$0.00] -&gt;</span>
+              </button>
+
+              <button id="disconnect-cart-btn" class="hud-btn-disconnect font-mono">
+                <span class="power-icon">⏻</span> DISCONNECT CART SESSION
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -328,7 +446,7 @@
         </div>
       </div>
 
-      <!-- Shared Bottom Technical Tab Bar -->
+      <!-- Mobile Bottom Navigation Bar (visible < 1024px) -->
       <nav id="bottom-tab-bar" class="hud-bottom-nav font-mono">
         <button id="tab-tally" class="nav-tab active" data-target="cart">
           <span class="tab-icon">🛒</span> TALLY

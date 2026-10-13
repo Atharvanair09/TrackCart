@@ -44,8 +44,8 @@ const checkoutBtn = document.getElementById('checkout-btn');
 const disconnectCartBtn = document.getElementById('disconnect-cart-btn');
 const newSessionBtn = document.getElementById('new-session-btn');
 
-// Nav Tabs
-const navTabs = document.querySelectorAll('.nav-tab');
+// Nav Tabs (both bottom and top bars)
+const navTabs = document.querySelectorAll('#bottom-tab-bar .nav-tab, #top-tab-bar .nav-tab');
 
 // Initialize PWA App
 function init() {
