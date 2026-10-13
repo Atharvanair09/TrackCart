@@ -3,6 +3,8 @@
 
 // ===========================
 // WiFi Configuration
+// Copy this file to config.h and fill in your actual credentials.
+// config.h is gitignored and will NOT be committed.
 // ===========================
 const char* WIFI_SSID = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";

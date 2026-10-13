@@ -5,6 +5,10 @@
 *.env
 backend/.env
 
+# Firmware secrets — copy config.example.h to config.h and fill in real values
+firmware/esp8266-rfid/src/config.h
+firmware/esp32-cam/config.h
+
 # Dependencies
 node_modules/
 **/node_modules/
