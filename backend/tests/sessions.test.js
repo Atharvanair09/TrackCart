@@ -123,4 +123,91 @@ describe('Session APIs', () => {
       expect(res.body.status).toBe('completed');
     });
   });
+  // Decrement endpoint tests
+  describe('POST /api/sessions/:sessionId/items/:productId/decrement', () => {
+    test('should decrement quantity when >1 (TEST 10)', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT * FROM shopping_sessions')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM cart_items')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD01', quantity: 2, unit_price_at_addition: 5, subtotal: 10 }] });
+        }
+        if (queryText.includes('UPDATE cart_items')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT ci.*, p.name')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD01', quantity: 1, unit_price_at_addition: 5, subtotal: 5, name: 'Item', image_url: '' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+      const res = await request(app).post('/api/sessions/SESS_TEST/items/PROD01/decrement');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.cart.total).toBe(5);
+      expect(res.body.cart.items[0].quantity).toBe(1);
+    });
+
+    test('should remove item when quantity is 1 (TEST 11)', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT * FROM shopping_sessions')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM cart_items')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD02', quantity: 1, unit_price_at_addition: 7, subtotal: 7 }] });
+        }
+        if (queryText.includes('DELETE FROM cart_items')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT ci.*, p.name')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+      const res = await request(app).post('/api/sessions/SESS_TEST/items/PROD02/decrement');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.cart.total).toBe(0);
+      expect(res.body.cart.items.length).toBe(0);
+    });
+
+    test('should return 404 for nonexistent session (TEST 12)', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT * FROM shopping_sessions')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+      const res = await request(app).post('/api/sessions/UNKNOWN/items/PROD01/decrement');
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Active session not found');
+    });
+
+    test('should return 404 for missing item (TEST 13)', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('SELECT * FROM shopping_sessions')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM cart_items')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+      const res = await request(app).post('/api/sessions/SESS_TEST/items/NONEXIST/decrement');
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Item not found in cart');
+    });
+  });
 });

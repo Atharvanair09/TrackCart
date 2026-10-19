@@ -251,7 +251,7 @@ function renderCart(sessionData) {
           <div class="item-optical-tag">■ OPTICAL MATCH // WEIGHT CONFIRMED</div>
           <div class="item-controls-row font-mono">
             <div class="qty-btn-group">
-              <button class="qty-btn" disabled>-</button>
+              <button class="qty-btn decrement" data-product-id="${item.product_id}">-</button>
               <span class="qty-val">${item.quantity}</span>
               <button class="qty-btn" disabled>+</button>
             </div>
@@ -270,10 +270,35 @@ function renderCart(sessionData) {
     cartTaxEl.textContent = formatPrice(tax);
     cartTotalEl.textContent = formatPrice(totalDue);
     checkoutTotalBadge.textContent = `[${formatPrice(totalDue)}] ->`;
+    // Attach decrement button listeners
+    document.querySelectorAll('.qty-btn.decrement').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const productId = btn.dataset.productId;
+        decrementItem(productId);
+      });
+    });
   }
 }
 
 // Checkout & End Session
+async function decrementItem(productId) {
+  if (!currentSessionId) return;
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/items/${productId}/decrement`, {
+      method: 'POST'
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to decrement item');
+    }
+    // Refresh cart view
+    fetchCart();
+  } catch (error) {
+    console.error('Error decrementing item:', error);
+    showError(cartError, error.message.toUpperCase());
+  }
+}
+
 async function checkout() {
   if (!currentSessionId) return;
 

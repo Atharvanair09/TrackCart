@@ -1,6 +1,7 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include "esp_http_server.h"
+#include "esp_timer.h"
 #include "config.h"
 
 httpd_handle_t camera_httpd = NULL;
@@ -110,10 +111,14 @@ static esp_err_t capture_handler(httpd_req_t *req){
   camera_fb_t * fb = NULL;
   esp_err_t res = ESP_OK;
 
+  int64_t t_fb_start = esp_timer_get_time();
   fb = esp_camera_fb_get();
+  int64_t t_fb_end = esp_timer_get_time();
   if (!fb) {
     Serial.println("Capture request failure: Camera capture failed");
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Camera capture failed");
+    Serial.printf("CAP_DIAG fb_get_fail fb_get_us=%lld\n",
+                  (long long)(t_fb_end - t_fb_start));
     return ESP_FAIL;
   }
 
@@ -122,6 +127,8 @@ static esp_err_t capture_handler(httpd_req_t *req){
     Serial.println("Capture request failure: Frame is not JPEG");
     esp_camera_fb_return(fb);
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Frame is not JPEG");
+    Serial.printf("CAP_DIAG not_jpeg fb_get_us=%lld\n",
+                  (long long)(t_fb_end - t_fb_start));
     return ESP_FAIL;
   }
 
@@ -129,14 +136,28 @@ static esp_err_t capture_handler(httpd_req_t *req){
   httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 
+  int64_t t_send_start = esp_timer_get_time();
   res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-  
+  int64_t t_send_end = esp_timer_get_time();
+
+  // Capture length before returning the frame buffer; do not touch fb after this.
+  size_t sent_len = fb->len;
   esp_camera_fb_return(fb);
 
   if (res == ESP_OK) {
-    Serial.printf("Capture request success: Sent %d bytes\n", fb->len);
+    Serial.printf("Capture request success: Sent %d bytes\n", sent_len);
+    Serial.printf("CAP_DIAG ok bytes=%u fb_get_us=%lld send_us=%lld res=%d\n",
+                  (unsigned)sent_len,
+                  (long long)(t_fb_end - t_fb_start),
+                  (long long)(t_send_end - t_send_start),
+                  (int)res);
   } else {
     Serial.printf("Capture request failure: send failed with error %d\n", res);
+    Serial.printf("CAP_DIAG send_fail bytes=%u fb_get_us=%lld send_us=%lld res=%d\n",
+                  (unsigned)sent_len,
+                  (long long)(t_fb_end - t_fb_start),
+                  (long long)(t_send_end - t_send_start),
+                  (int)res);
   }
 
   return res;

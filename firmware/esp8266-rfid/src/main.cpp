@@ -18,14 +18,14 @@ void setup() {
 }
 
 void loop() {
-    // 1. Maintain Wi-Fi connection (reconnect if lost)
-    maintainNetwork();
+  maintainNetwork();
 
-    // 2. Process RFID card detection
-    String tagUid = processRFID();
+  String tagUid = processRFID();
 
-    // 3. If a new, non-debounced tag was detected, send to backend
-    if (tagUid != "") {
-        sendRFIDEvent(tagUid);
-    }
+  if (tagUid != "") {
+    Serial.println(F("UID received by main loop"));
+    Serial.println(F("Sending RFID event to backend..."));
+    sendRFIDEvent(tagUid);
+  }
 }
+

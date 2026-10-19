@@ -96,4 +96,60 @@ router.post('/:sessionId/end', async (req, res) => {
   }
 });
 
+// POST /api/sessions/:sessionId/items/:productId/decrement - Decrease quantity or remove item
+router.post('/:sessionId/items/:productId/decrement', async (req, res) => {
+  const { sessionId, productId } = req.params;
+  if (!sessionId || !productId) {
+    return res.status(400).json({ error: 'Missing sessionId or productId' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Verify session exists and is active
+    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2', [sessionId, 'active']);
+    if (sessionRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Active session not found' });
+    }
+    // Fetch cart item
+    const itemRes = await client.query('SELECT * FROM cart_items WHERE session_id = $1 AND product_id = $2', [sessionId, productId]);
+    if (itemRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found in cart' });
+    }
+    const item = itemRes.rows[0];
+    if (item.quantity > 1) {
+      // Decrement quantity
+      await client.query(
+        `UPDATE cart_items SET quantity = quantity - 1, subtotal = (quantity - 1) * unit_price_at_addition WHERE session_id = $1 AND product_id = $2`,
+        [sessionId, productId]
+      );
+    } else {
+      // Quantity would become zero – remove item
+      await client.query('DELETE FROM cart_items WHERE session_id = $1 AND product_id = $2', [sessionId, productId]);
+    }
+    // Fetch updated cart state
+    const itemsResult = await client.query(`
+      SELECT ci.*, p.name, p.image_url
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.product_id
+      WHERE ci.session_id = $1
+    `, [sessionId]);
+    await client.query('COMMIT');
+    const cartItems = itemsResult.rows;
+    const cartTotal = cartItems.reduce((sum, i) => sum + i.subtotal, 0);
+    return res.status(200).json({
+      success: true,
+      sessionId,
+      cart: { items: cartItems, total: cartTotal },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error decrementing item:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

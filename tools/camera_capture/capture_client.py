@@ -4,6 +4,7 @@ import time
 import urllib.request
 import urllib.error
 import socket
+import statistics
 from datetime import datetime
 
 def main():
@@ -47,11 +48,22 @@ def main():
         'requested': 0,
         'saved': 0,
         'failed': 0,
-        'total_bytes': 0
+        'jpeg_validation_failed': 0,
+        'total_bytes': 0,
+        'request_durations': [],          # HTTP request durations for successful captures
+        'request_durations_failed': [],   # HTTP request durations for failed attempts (timeout/conn error)
+        'save_durations': [],             # Disk write durations for saved frames
+        'jpeg_sizes_valid': [],           # Sizes in bytes of JPEG-valid bodies
+        'jpeg_sizes_invalid': [],         # Sizes in bytes of bodies that failed JPEG validation
+        'inter_frame_intervals': [],     # Elapsed time between consecutive request starts
+        'scheduler_sleeps': [],           # Actual sleep durations slept by the scheduler
+        'scheduler_skips': 0,            # Count of cycles where sleep_time <= 0 (skip)
     }
 
     session_start_time = time.time()
+    session_perf_start = time.perf_counter()
     last_print_time = session_start_time
+    last_request_start_perf = None
 
     try:
         while True:
@@ -79,30 +91,72 @@ def main():
             filename = f"frame_{metrics['saved'] + 1:06d}.jpg"
             filepath = os.path.join(session_dir, filename)
 
+            request_start_perf = time.perf_counter()
+            if last_request_start_perf is not None:
+                metrics['inter_frame_intervals'].append(
+                    request_start_perf - last_request_start_perf
+                )
+            last_request_start_perf = request_start_perf
+
+            request_failed = False
+            jpeg_valid = False
+            jpeg_size = 0
+            save_duration = 0.0
+
             try:
                 req = urllib.request.Request(url)
                 with urllib.request.urlopen(req, timeout=args.timeout) as response:
                     if response.status == 200:
                         data = response.read()
+                        request_end_perf = time.perf_counter()
+                        metrics['request_durations'].append(
+                            request_end_perf - request_start_perf
+                        )
+                        jpeg_size = len(data)
                         if data.startswith(b'\xff\xd8'):
+                            save_start_perf = time.perf_counter()
                             with open(filepath, "wb") as f:
                                 f.write(data)
+                            save_duration = time.perf_counter() - save_start_perf
+                            metrics['save_durations'].append(save_duration)
                             metrics['saved'] += 1
                             metrics['total_bytes'] += len(data)
+                            metrics['jpeg_sizes_valid'].append(jpeg_size)
+                            jpeg_valid = True
                         else:
                             metrics['failed'] += 1
+                            metrics['jpeg_validation_failed'] += 1
+                            metrics['jpeg_sizes_invalid'].append(jpeg_size)
                     else:
+                        request_end_perf = time.perf_counter()
+                        metrics['request_durations_failed'].append(
+                            request_end_perf - request_start_perf
+                        )
                         metrics['failed'] += 1
+                        request_failed = True
             except (urllib.error.URLError, socket.timeout, ConnectionError):
+                request_end_perf = time.perf_counter()
+                metrics['request_durations_failed'].append(
+                    request_end_perf - request_start_perf
+                )
                 metrics['failed'] += 1
+                request_failed = True
             except OSError:
+                request_end_perf = time.perf_counter()
+                metrics['request_durations_failed'].append(
+                    request_end_perf - request_start_perf
+                )
                 metrics['failed'] += 1
+                request_failed = True
 
             # Scheduling: Wait for the next frame time
             next_frame_time = session_start_time + (metrics['requested'] * frame_interval)
             sleep_time = next_frame_time - time.time()
             if sleep_time > 0:
+                metrics['scheduler_sleeps'].append(sleep_time)
                 time.sleep(sleep_time)
+            else:
+                metrics['scheduler_skips'] += 1
 
     except KeyboardInterrupt:
         print("\nCapture interrupted by user (Ctrl+C).")
@@ -119,7 +173,44 @@ def main():
     print(f"Frames Saved: {metrics['saved']}")
     print(f"Frames Fail:  {metrics['failed']}")
     print(f"Actual FPS:   {actual_fps:.2f}")
+    print(f"Requested FPS: {args.fps}")
     print(f"Avg JPEG:     {avg_size/1024:.1f} KB")
+
+    # --- Diagnostic timing statistics ---
+
+    def stat_summary(label, samples, unit="s", divisor=1):
+        if not samples:
+            print(f"{label}: no samples recorded")
+            return
+        vals = [v / divisor for v in samples]
+        print(f"{label} ({unit}): "
+              f"min={min(vals):.3f}  mean={statistics.mean(vals):.3f}  "
+              f"median={statistics.median(vals):.3f}  max={max(vals):.3f}")
+
+    print("\n--- Diagnostic Timings ---")
+    stat_summary("Request dur (ok)", metrics['request_durations'])
+    stat_summary("Request dur (failed)", metrics['request_durations_failed'])
+    stat_summary("Save dur", metrics['save_durations'])
+    stat_summary("Inter-frame", metrics['inter_frame_intervals'])
+    stat_summary("JPEG size (valid)", metrics['jpeg_sizes_valid'], unit="KB", divisor=1024)
+    stat_summary("JPEG size (invalid)", metrics['jpeg_sizes_invalid'], unit="KB", divisor=1024)
+    stat_summary("Scheduler sleep", metrics['scheduler_sleeps'])
+
+    print(f"Scheduler sleep skips: {metrics['scheduler_skips']}")
+    print(f"JPEG validation failures: {metrics['jpeg_validation_failed']}")
+
+    # Concise slowest-requests summary (top 5 by request duration, mixed ok/failed)
+    all_req = [
+        ("ok", d) for d in metrics['request_durations']
+    ] + [
+        ("fail", d) for d in metrics['request_durations_failed']
+    ]
+    if len(all_req) > 1:
+        all_req.sort(key=lambda x: x[1], reverse=True)
+        top_n = min(5, len(all_req))
+        print(f"\nSlowest {top_n} requests:")
+        for kind, dur in all_req[:top_n]:
+            print(f"  {kind:4s} {dur:.3f}s")
 
 if __name__ == "__main__":
     main()

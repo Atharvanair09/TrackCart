@@ -2,7 +2,7 @@
 #include "config.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecureBearSSL.h>
 
 unsigned long lastWifiCheckTime = 0;
 const unsigned long WIFI_CHECK_INTERVAL_MS = 10000;
@@ -51,7 +51,8 @@ void sendRFIDEvent(const String& tagUid) {
         return;
     }
 
-    WiFiClient client;
+    BearSSL::WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
 
     String url = String(BACKEND_BASE_URL) + "/api/rfid/events";
