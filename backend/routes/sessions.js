@@ -80,18 +80,78 @@ router.get('/:sessionId', async (req, res) => {
 });
 
 // POST /api/sessions/:sessionId/end - End a session
-router.post('/:sessionId/end', async (req, res) => {
+router.post('/:sessionId/checkout', async (req, res) => {
+  const sessionId = req.params.sessionId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Verify session exists and is active
+    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2', [sessionId, 'active']);
+    if (sessionRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Invalid or inactive session' });
+    }
+    // Check if sale already exists for this session (idempotent)
+    const existingSale = await client.query('SELECT * FROM sales WHERE session_id = $1', [sessionId]);
+    if (existingSale.rows.length > 0) {
+      // Sale already recorded, return it
+      await client.query('COMMIT');
+      return res.status(200).json(existingSale.rows[0]);
+    }
+    // Fetch cart items for calculation
+    const itemsRes = await client.query('SELECT ci.*, p.price FROM cart_items ci JOIN products p ON ci.product_id = p.product_id WHERE ci.session_id = $1', [sessionId]);
+    if (itemsRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cart is empty, cannot checkout' });
+    }
+    // Calculate totals
+    const subtotal = itemsRes.rows.reduce((sum, i) => sum + (i.unit_price_at_addition * i.quantity), 0);
+    const taxRate = 0.0825;
+    const taxAmount = parseFloat((subtotal * taxRate).toFixed(2));
+    const total = parseFloat((subtotal + taxAmount).toFixed(2));
+    const saleId = `SALE_${Date.now()}`;
+    // Insert sale record
+    const saleInsert = await client.query(
+      `INSERT INTO sales (sale_id, session_id, subtotal, tax_rate, tax_amount, total) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [saleId, sessionId, subtotal, taxRate, taxAmount, total]
+    );
+    const saleRecord = saleInsert.rows[0];
+    // Insert line items
+    const lineItemPromises = itemsRes.rows.map(item => {
+      const lineSubtotal = parseFloat((item.unit_price_at_addition * item.quantity).toFixed(2));
+      return client.query(
+        `INSERT INTO sale_line_items (sale_id, product_id, quantity, unit_price, line_subtotal) VALUES ($1, $2, $3, $4, $5)`,
+        [saleId, item.product_id, item.quantity, item.unit_price_at_addition, lineSubtotal]
+      );
+    });
+    await Promise.all(lineItemPromises);
+    // Mark session as completed
+    await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
+    await client.query('COMMIT');
+    return res.status(200).json(saleRecord);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error during checkout:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/sessions/:sessionId/cancel - Cancel a session
+router.post('/:sessionId/cancel', async (req, res) => {
+  const sessionId = req.params.sessionId;
   try {
     const result = await pool.query(
       'UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2 RETURNING *',
-      ['completed', req.params.sessionId]
+      ['cancelled', sessionId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
     res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Error ending session:', error);
+    console.error('Error cancelling session:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

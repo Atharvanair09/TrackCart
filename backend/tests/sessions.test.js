@@ -110,17 +110,36 @@ describe('Session APIs', () => {
   });
 
   describe('POST /api/sessions/:sessionId/end', () => {
-    test('should complete a session (TEST 9)', async () => {
-      mockPool.query.mockImplementation((queryText, params) => {
-        if (queryText.includes('UPDATE shopping_sessions')) {
-          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'completed' }] });
-        }
-        return Promise.resolve({ rows: [] });
-      });
+    test('should complete a checkout via /checkout (TEST 9)', async () => {
+      // Mock client connection and queries
+      const mockClient = {
+        query: jest.fn((queryText, params) => {
+          if (queryText.includes('UPDATE shopping_sessions')) {
+            return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'completed' }] });
+          }
+          if (queryText.includes('SELECT * FROM sales')) {
+            return Promise.resolve({ rows: [] }); // No existing sale
+          }
+          if (queryText.includes('SELECT ci.*, p.price')) {
+            // Return one cart item
+            return Promise.resolve({ rows: [{ product_id: 'PROD01', unit_price_at_addition: 10, quantity: 2 }] });
+          }
+          if (queryText.includes('INSERT INTO sales')) {
+            return Promise.resolve({ rows: [{ sale_id: 'SALE_123', subtotal: 20, tax_rate: 0.0825, tax_amount: 1.65, total: 21.65 }] });
+          }
+          if (queryText.includes('INSERT INTO sale_line_items')) {
+            return Promise.resolve();
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+        release: jest.fn()
+      };
+      // mock pool.connect to return our mock client
+      mockPool.connect.mockResolvedValue(mockClient);
 
-      const res = await request(app).post('/api/sessions/SESS_TEST/end');
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
       expect(res.statusCode).toBe(200);
-      expect(res.body.status).toBe('completed');
+      expect(res.body).toHaveProperty('sale_id');
     });
   });
   // Decrement endpoint tests

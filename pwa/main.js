@@ -293,7 +293,7 @@ async function decrementItem(productId) {
     }
     // Refresh cart view
     fetchCart();
-  } catch (error) {
+  } catch (error) {ś
     console.error('Error decrementing item:', error);
     showError(cartError, error.message.toUpperCase());
   }
@@ -306,7 +306,7 @@ async function checkout() {
   checkoutBtn.textContent = 'PROCESSING CHECKOUT...';
 
   try {
-    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/end`, {
+    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/checkout`, {
       method: 'POST'
     });
 
@@ -332,7 +332,7 @@ async function disconnectSession() {
   }
 
   try {
-    await fetch(`${API_BASE}/sessions/${currentSessionId}/end`, { method: 'POST' });
+    await fetch(`${API_BASE}/sessions/${currentSessionId}/cancel`, { method: 'POST' });
   } catch (err) {
     console.warn('Disconnect request error:', err);
   } finally {
