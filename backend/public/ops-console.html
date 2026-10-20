@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KINETIC — Operations Console</title>
+  <meta name="description" content="KINETIC Operations Console — Real-time smart cart reconciliation, autonomous reorder dispatch, dynamic scale management">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ================================================================
+       DESIGN SYSTEM TOKENS
+       ================================================================ */
+    :root {
+      --bg: #f5f5f0;
+      --bg-card: #ffffff;
+      --bg-dark: #1a1a1a;
+      --bg-darker: #000000;
+      --text-primary: #000000;
+      --text-secondary: #555555;
+      --text-inverse: #ffffff;
+      --border: #000000;
+      --border-light: #cccccc;
+      --accent: #000000;
+      --highlight-green: #00cc66;
+      --highlight-red: #cc0000;
+      --highlight-yellow: #ccaa00;
+      --badge-dark: #1a1a1a;
+      --badge-light: #e0e0e0;
+
+      --font-mono: 'Space Mono', 'Courier New', monospace;
+      --font-sans: 'Space Grotesk', 'Arial', sans-serif;
+
+      --radius-sm: 2px;
+      --radius-md: 4px;
+    }
+
+    /* ================================================================
+       RESET & BASE
+       ================================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.4;
+      overflow-x: hidden;
+    }
+
+    /* ================================================================
+       TOP HEADER BAR
+       ================================================================ */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      padding: 6px 12px;
+      gap: 10px;
+      font-size: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 2px;
+    }
+
+    .logo-icon {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+
+    .top-bar-badge {
+      background: var(--text-inverse);
+      color: var(--bg-darker);
+      padding: 2px 8px;
+      font-weight: 700;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .top-bar-meta {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: #aaa;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .top-bar-meta span {
+      border-left: 1px solid #444;
+      padding-left: 10px;
+    }
+
+    .top-bar-meta span:first-child {
+      border-left: none;
+      padding-left: 0;
+    }
+
+    .badge-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 2px;
+    }
+
+    .badge-green {
+      background: var(--highlight-green);
+      color: #000;
+    }
+
+    .badge-red {
+      background: var(--highlight-red);
+      color: #fff;
+    }
+
+    .badge-yellow {
+      background: #e8d44d;
+      color: #000;
+    }
+
+    .badge-dark {
+      background: #333;
+      color: #fff;
+    }
+
+    .badge-outline {
+      background: transparent;
+      color: #fff;
+      border: 1px solid #666;
+    }
+
+    .top-bar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 9px;
+      color: #aaa;
+    }
+
+    .top-bar-time {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .user-avatar {
+      width: 24px;
+      height: 24px;
+      background: #333;
+      border-radius: 50%;
+      border: 1px solid #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #aaa;
+    }
+
+    /* ================================================================
+       LAYOUT: SIDEBAR + MAIN
+       ================================================================ */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - 36px);
+    }
+
+    .sidebar {
+      width: 180px;
+      background: var(--bg);
+      border-right: 1px solid var(--border-light);
+      padding: 14px 10px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-title {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .sidebar-subtitle {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+
+    .sidebar-nav {
+      list-style: none;
+    }
+
+    .sidebar-nav li {
+      margin-bottom: 2px;
+    }
+
+    .sidebar-nav a {
+      display: block;
+      padding: 6px 8px;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid transparent;
+      transition: all 0.1s;
+    }
+
+    .sidebar-nav a:hover,
+    .sidebar-nav a.active {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    .sidebar-nav a::before {
+      content: '⊡ ';
+    }
+
+    .sidebar-bottom {
+      position: absolute;
+      bottom: 14px;
+      font-size: 8px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    .sidebar-bottom-label {
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 7px;
+      color: #999;
+      margin-bottom: 2px;
+    }
+
+    /* ================================================================
+       MAIN CONTENT
+       ================================================================ */
+    .main {
+      flex: 1;
+      padding: 16px 20px;
+      overflow-y: auto;
+    }
+
+    /* ================================================================
+       OPERATIONS CONSOLE HEADER
+       ================================================================ */
+    .ops-header {
+      margin-bottom: 16px;
+    }
+
+    .ops-header-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 8px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .ops-header-top span {
+      text-transform: uppercase;
+    }
+
+    .ops-title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .ops-title {
+      font-family: var(--font-sans);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ops-subtitle {
+      font-size: 8px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+      font-family: var(--font-mono);
+    }
+
+    .last-sync {
+      text-align: right;
+      font-size: 8px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+
+    .last-sync-time {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      display: block;
+    }
+
+    .force-resync-btn {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 4px 10px;
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      border: none;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+
+    .force-resync-btn::before {
+      content: '↻ ';
+    }
+
+    /* ================================================================
+       STATS ROW
+       ================================================================ */
+    .stats-row {
+      display: flex;
+      gap: 0;
+      border: 2px solid var(--border);
+      margin-bottom: 16px;
+      background: var(--bg-card);
+    }
+
+    .stat-card {
+      flex: 1;
+      padding: 12px 14px;
+      border-right: 1px solid var(--border-light);
+      position: relative;
+    }
+
+    .stat-card:last-child {
+      border-right: none;
+    }
+
+    .stat-card-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-card-value {
+      font-family: var(--font-sans);
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat-card-value-sm {
+      font-size: 20px;
+    }
+
+    .stat-card-sub {
+      font-size: 8px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    .stat-card-footer {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border-light);
+      font-size: 7px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      display: flex;
+      gap: 10px;
+    }
+
+    .stat-highlight {
+      border-left: 3px solid var(--border);
+    }
+
+    .stat-bar {
+      width: 40px;
+      height: 24px;
+      display: inline-flex;
+      gap: 1px;
+      align-items: flex-end;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
+    .stat-bar-segment {
+      width: 5px;
+      background: #000;
+    }
+
+    /* ================================================================
+       TWO-COLUMN SECTIONS
+       ================================================================ */
+    .two-col {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .two-col > .panel {
+      flex: 1;
+    }
+
+    /* ================================================================
+       PANEL (CARD)
+       ================================================================ */
+    .panel {
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      margin-bottom: 16px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .panel-title {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .panel-title::before {
+      content: '■';
+      font-size: 8px;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .panel-body {
+      padding: 12px 14px;
+    }
+
+    /* ================================================================
+       SKU ITEM ROW
+       ================================================================ */
+    .sku-item {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--border-light);
+      margin-bottom: 8px;
+      background: var(--bg-card);
+      min-height: 60px;
+    }
+
+    .sku-item-rank {
+      width: 28px;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      border-right: 1px solid var(--border-light);
+      font-family: var(--font-sans);
+    }
+
+    .sku-item-body {
+      flex: 1;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sku-item-info {
+      flex: 1;
+    }
+
+    .sku-item-name {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .sku-item-name a {
+      color: var(--text-primary);
+      text-decoration: underline;
+    }
+
+    .sku-item-meta {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      line-height: 1.5;
+    }
+
+    .sku-item-stats {
+      text-align: right;
+      font-family: var(--font-mono);
+    }
+
+    .sku-velocity {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .sku-runway {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+
+    .sku-progress {
+      width: 80px;
+      height: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      margin-top: 4px;
+      margin-left: auto;
+    }
+
+    .sku-progress-fill {
+      height: 100%;
+      background: var(--bg-darker);
+    }
+
+    .sku-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid var(--border);
+      margin-top: 3px;
+    }
+
+    .sku-tag-fill {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      border-color: var(--bg-darker);
+    }
+
+    .sku-tag-outline {
+      background: transparent;
+      color: var(--text-primary);
+    }
+
+    /* ================================================================
+       STAGNANT SKU ITEM (Right Column - Compact)
+       ================================================================ */
+    .stagnant-item {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border-light);
+      margin-bottom: 6px;
+      padding: 8px 10px;
+      background: var(--bg-card);
+    }
+
+    .stagnant-item-body {
+      flex: 1;
+    }
+
+    .stagnant-item-name {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 10px;
+      margin-bottom: 2px;
+    }
+
+    .stagnant-item-meta {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .stagnant-item-score {
+      text-align: right;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 18px;
+      min-width: 50px;
+    }
+
+    .stagnant-item-score-label {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      text-align: right;
+      font-family: var(--font-mono);
+    }
+
+    /* ================================================================
+       PREDICTIVE RESTOCKING MATRIX TABLE
+       ================================================================ */
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+      font-family: var(--font-mono);
+    }
+
+    .matrix-table thead {
+      background: var(--bg);
+    }
+
+    .matrix-table th {
+      padding: 6px 8px;
+      text-align: left;
+      font-size: 7px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .matrix-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: top;
+    }
+
+    .matrix-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .matrix-product-name {
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 10px;
+    }
+
+    .matrix-product-meta {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      line-height: 1.6;
+    }
+
+    .matrix-badge-today {
+      display: inline-block;
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      padding: 2px 6px;
+      font-size: 7px;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .matrix-sub {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .matrix-action-btn {
+      display: inline-block;
+      padding: 4px 10px;
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      font-family: var(--font-mono);
+      font-size: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .matrix-action-btn:hover {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    .matrix-footer {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border-light);
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+
+    /* ================================================================
+       EXPIRY TELEMETRY / DYNAMIC MARKDOWN SECTION
+       ================================================================ */
+    .expiry-panel {
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      margin-bottom: 16px;
+    }
+
+    .expiry-header {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .expiry-title {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .expiry-title-sub {
+      font-size: 8px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      color: #999;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    .expiry-header-right {
+      text-align: right;
+      font-size: 8px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+
+    .expiry-config-bar {
+      display: flex;
+      align-items: center;
+      padding: 8px 14px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 8px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      background: var(--bg);
+    }
+
+    .expiry-products {
+      display: flex;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .expiry-product-card {
+      flex: 1;
+      border: 2px solid var(--border);
+      padding: 12px;
+      background: var(--bg-card);
+      position: relative;
+    }
+
+    .expiry-card-tag {
+      display: inline-block;
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      padding: 2px 8px;
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .expiry-card-qty {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .expiry-card-name {
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .expiry-card-sku {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .expiry-price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2px;
+    }
+
+    .expiry-price-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .expiry-price-old {
+      font-size: 10px;
+      text-decoration: line-through;
+      color: var(--text-secondary);
+    }
+
+    .expiry-price-new-label {
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .expiry-price-new {
+      font-family: var(--font-sans);
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .expiry-price-note {
+      font-size: 7px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .expiry-card-btn {
+      display: block;
+      width: 100%;
+      padding: 6px;
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .expiry-card-btn:hover {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    /* ================================================================
+       BOTTOM CONTROL BAR
+       ================================================================ */
+    .bottom-bar {
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .bottom-bar-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .bottom-bar-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-family: var(--font-sans);
+    }
+
+    .bottom-bar-sublabel {
+      font-size: 8px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+
+    .bottom-bar-meta {
+      font-size: 8px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      border-left: 1px solid var(--border-light);
+      padding-left: 14px;
+    }
+
+    .bottom-btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .bottom-btn:hover {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    .bottom-btn-dark {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    .bottom-btn-dark:hover {
+      background: #333;
+    }
+
+    .bottom-btn-warning {
+      border-color: var(--highlight-red);
+      color: var(--highlight-red);
+    }
+
+    .bottom-btn-warning::before {
+      content: '⚠ ';
+    }
+
+    /* ================================================================
+       UTILITY CLASSES
+       ================================================================ */
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-4 { gap: 4px; }
+    .gap-6 { gap: 6px; }
+    .gap-8 { gap: 8px; }
+    .gap-10 { gap: 10px; }
+    .gap-12 { gap: 12px; }
+    .mt-4 { margin-top: 4px; }
+    .mt-8 { margin-top: 8px; }
+    .mb-4 { margin-bottom: 4px; }
+    .mb-8 { margin-bottom: 8px; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .font-bold { font-weight: 700; }
+    .uppercase { text-transform: uppercase; }
+    .mono { font-family: var(--font-mono); }
+    .sans { font-family: var(--font-sans); }
+    .text-xs { font-size: 8px; }
+    .text-xxs { font-size: 7px; }
+    .text-sm { font-size: 10px; }
+    .text-muted { color: var(--text-secondary); }
+    .w-full { width: 100%; }
+    .border-t { border-top: 1px solid var(--border-light); }
+    .pt-6 { padding-top: 6px; }
+
+    .tag-inverted {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      padding: 2px 6px;
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      display: inline-block;
+      letter-spacing: 0.5px;
+    }
+
+    .tag-outline-dark {
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      display: inline-block;
+      letter-spacing: 0.5px;
+    }
+
+    .divider-v {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border-light);
+    }
+
+    .icon-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    .icon-dot-green { background: var(--highlight-green); }
+    .icon-dot-red { background: var(--highlight-red); }
+    .icon-dot-yellow { background: var(--highlight-yellow); }
+
+    .stock-label {
+      font-size: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-family: var(--font-mono);
+    }
+
+    /* Scrollable table wrapper */
+    .table-scroll {
+      overflow-x: auto;
+    }
+
+    /* Panel badge in header */
+    .panel-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid var(--border);
+    }
+
+    .panel-badge-dark {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+      border-color: var(--bg-darker);
+    }
+
+    /* Automate PO bar */
+    .auto-po-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .toggle-switch {
+      width: 28px;
+      height: 14px;
+      background: var(--bg-darker);
+      border-radius: 7px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      right: 2px;
+    }
+
+    /* Receipt-like dashed border */
+    .dashed-border {
+      border-style: dashed;
+    }
+
+    /* Capital efficiency label */
+    .capital-eff {
+      display: inline-block;
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-family: var(--font-mono);
+    }
+
+    /* Stagnant bottom row */
+    .stagnant-footer {
+      padding: 8px 10px;
+      border-top: 1px solid var(--border-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stagnant-total {
+      font-family: var(--font-sans);
+    }
+
+    .stagnant-total-label {
+      font-size: 7px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    .stagnant-total-value {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .stagnant-action-btn {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-family: var(--font-mono);
+      font-size: 7px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+
+    .stagnant-action-btn:hover {
+      background: var(--bg-darker);
+      color: var(--text-inverse);
+    }
+
+    /* Sidebar telemetry link bottom */
+    .sidebar-wrapper {
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP HEADER BAR
+       ============================================================ -->
+  <div class="top-bar" id="top-bar">
+    <div class="logo">
+      <div class="logo-icon">K</div>
+      KINETIC
+    </div>
+    <span class="top-bar-badge">MAIN.SYS</span>
+    <div class="top-bar-meta">
+      <span>SYS_STAT: <strong>ONLINE</strong></span>
+      <span>NODE: <strong>ES-EAST-7309</strong></span>
+      <span>ACTIVE CARTS: <span class="badge-pill badge-green">127</span></span>
+      <span><span class="badge-pill badge-dark">INV ▼ 1.3K</span></span>
+    </div>
+    <div class="top-bar-right">
+      <span class="top-bar-time">14:48.52 UTC</span>
+      <span style="color:#666;">UNITED STATES ▾</span>
+      <div class="user-avatar">👤</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       LAYOUT
+       ============================================================ -->
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar sidebar-wrapper" id="sidebar">
+      <div class="sidebar-title">STATUS CONSOLE</div>
+      <div class="sidebar-subtitle">BAY-84 / RETRO-HUB</div>
+      <ul class="sidebar-nav">
+        <li><a href="#" class="active">Overview / Telemetry</a></li>
+        <li><a href="#">Inventory Velocity</a></li>
+        <li><a href="#">Predictive Restock</a></li>
+        <li><a href="#">Expiry & Markdowns</a></li>
+        <li><a href="#">Active Fleet</a></li>
+        <li><a href="#">System Log</a></li>
+      </ul>
+      <div class="sidebar-bottom">
+        <div class="sidebar-bottom-label">TELEMETRY LINK</div>
+        <div>DBNA 34</div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main" id="main-content">
+
+      <!-- OPS HEADER -->
+      <div class="ops-header">
+        <div class="ops-header-top">
+          <span>MODULE: TELEMETRY-INVENTORY-CORE / NODE: UR-EAST-EAST / VER. 4.0.2</span>
+        </div>
+        <div class="ops-title-row">
+          <div>
+            <div class="ops-title">
+              OPERATIONS CONSOLE
+              <span class="badge-pill badge-green" style="font-size:8px;">SYS VERIFIED</span>
+            </div>
+            <div class="ops-subtitle">
+              REAL-TIME SMART CART RECONCILIATION • AUTONOMOUS REORDER DISPATCH • DYNAMIC SCALE
+            </div>
+          </div>
+          <div class="last-sync">
+            <div style="font-size:7px; letter-spacing:1px;">LAST SYNC</div>
+            <span class="last-sync-time">09:19:53 UTC</span>
+            <button class="force-resync-btn" id="btn-resync">FORCE RE-SYNC</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS ROW -->
+      <div class="stats-row" id="stats-row">
+        <!-- Revenue -->
+        <div class="stat-card">
+          <div class="stat-card-label">
+            REVENUE VELOCITY
+            <span class="tag-inverted">24H</span>
+          </div>
+          <div class="stat-card-value">$48,920.50</div>
+          <div class="stat-card-sub">TODAY (95 ENROLLED)</div>
+          <div class="stat-card-footer">
+            <span><span class="icon-dot icon-dot-green"></span>38 7.5K CARTS</span>
+            <span>PACE: IN TRANSIT</span>
+          </div>
+        </div>
+        <div class="divider-v"></div>
+
+        <!-- Critical Alerts -->
+        <div class="stat-card stat-highlight">
+          <div class="stat-card-label">
+            DEVIATION //
+            <span style="color:#000;font-weight:700;">RAW</span>
+            <div class="stat-bar">
+              <div class="stat-bar-segment" style="height:40%"></div>
+              <div class="stat-bar-segment" style="height:60%"></div>
+              <div class="stat-bar-segment" style="height:100%"></div>
+              <div class="stat-bar-segment" style="height:80%"></div>
+              <div class="stat-bar-segment" style="height:50%"></div>
+            </div>
+          </div>
+          <div class="stat-card-value stat-card-value-sm">06 <span style="font-size:10px;font-weight:400;color:#555;">SKUS</span></div>
+          <div class="stat-card-sub">CRITICAL STOCK SHORTAGE</div>
+          <div class="stat-card-footer">
+            <span>ANTI-FB: 6.STDEV…2</span>
+            <span>STATUS: TRENDING</span>
+          </div>
+        </div>
+        <div class="divider-v"></div>
+
+        <!-- Active Markdowns -->
+        <div class="stat-card">
+          <div class="stat-card-label">
+            ACTIVE //
+            <span style="font-weight:700;color:#000;">MARKDOWNS</span>
+          </div>
+          <div class="stat-card-value stat-card-value-sm">14 <span style="font-size:10px;font-weight:400;color:#555;">SKUS</span></div>
+          <div class="stat-card-sub">D-480 TO SHELF ZERO-VAL</div>
+          <div class="stat-card-footer">
+            <span>FLASH SALE: 3 ACTIVE</span>
+            <span>TAGS: DISPATCHING</span>
+          </div>
+        </div>
+        <div class="divider-v"></div>
+
+        <!-- Lane Velocity -->
+        <div class="stat-card">
+          <div class="stat-card-label">
+            LANE<br>VELOCITY
+          </div>
+          <div class="stat-card-value stat-card-value-sm">3.4 <span style="font-size:10px;font-weight:400;color:#555;">UNITS/MIN</span></div>
+          <div class="stat-card-sub">WEIGHT MATCH: 98.1% VAL</div>
+          <div class="stat-card-footer">
+            <span>THROUGHPUT: 0.025</span>
+          </div>
+        </div>
+
+        <!-- Scale (mini) -->
+        <div class="divider-v"></div>
+        <div class="stat-card" style="max-width:60px;text-align:center;">
+          <div class="stat-card-label" style="justify-content:center;">SCALE</div>
+          <div style="width:30px;height:30px;border:2px solid #000;border-radius:50%;margin:4px auto;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;">OK</div>
+        </div>
+      </div>
+
+      <!-- TWO COLUMN: FAST-MOVING + STAGNANT -->
+      <div class="two-col" id="velocity-section">
+        <!-- FAST-MOVING SKUS -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">FAST-MOVING SKUS // TOP VELOCITY</div>
+            <div class="panel-actions">
+              <span class="panel-badge">PRIORITY 8</span>
+              <span class="panel-badge panel-badge-dark">OVERRIDES</span>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <!-- SKU 1 -->
+            <div class="sku-item">
+              <div class="sku-item-rank">1</div>
+              <div class="sku-item-body">
+                <div class="sku-item-info">
+                  <div class="sku-item-name"><a href="#">Oat Milk Barista 1L</a> <span style="font-size:8px;color:#555;">[1LT]</span></div>
+                  <div class="sku-item-meta">
+                    SKU: 04918<br>
+                  </div>
+                </div>
+                <div class="sku-item-stats">
+                  <div class="sku-velocity">142 u/hr → 6.2h</div>
+                  <div class="sku-runway">RUNOUT</div>
+                  <div class="sku-progress"><div class="sku-progress-fill" style="width:15%"></div></div>
+                  <div style="margin-top:4px;">
+                    <span class="sku-tag sku-tag-fill">FULL</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SKU 2 -->
+            <div class="sku-item">
+              <div class="sku-item-rank">2</div>
+              <div class="sku-item-body">
+                <div class="sku-item-info">
+                  <div class="sku-item-name"><a href="#">Artisan Sourdough 500g</a> <span style="font-size:8px;color:#555;">[SKU]</span></div>
+                  <div class="sku-item-meta">
+                    SKU: 71952<br>
+                  </div>
+                </div>
+                <div class="sku-item-stats">
+                  <div class="sku-velocity">94 u/hr → 3.5h</div>
+                  <div class="sku-runway">RUNOUT</div>
+                  <div class="sku-progress"><div class="sku-progress-fill" style="width:35%"></div></div>
+                  <div style="margin-top:4px;">
+                    <span class="sku-tag sku-tag-outline">MVS CRIT [X]</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SKU 3 -->
+            <div class="sku-item">
+              <div class="sku-item-rank">3</div>
+              <div class="sku-item-body">
+                <div class="sku-item-info">
+                  <div class="sku-item-name"><a href="#">Organic Bananas (Dynamic Scale)</a></div>
+                  <div class="sku-item-meta">
+                    SKU: 04917<br>
+                    EAN TALLY: 432 / TA1050T1005
+                  </div>
+                </div>
+                <div class="sku-item-stats">
+                  <div class="sku-velocity">88 u/hr → 7.0h</div>
+                  <div class="sku-runway">RUNOUT</div>
+                  <div style="margin-top:4px;">
+                    <span class="sku-tag sku-tag-outline">PROJECT JILANE R1</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SKU 4 -->
+            <div class="sku-item">
+              <div class="sku-item-rank">4</div>
+              <div class="sku-item-body">
+                <div class="sku-item-info">
+                  <div class="sku-item-name"><a href="#">EV Olive Oil 500ml</a> <span style="font-size:8px;color:#555;">[510</span></div>
+                  <div class="sku-item-meta">
+                    SKU: 30821<br>
+                  </div>
+                </div>
+                <div class="sku-item-stats">
+                  <div class="sku-velocity">64 u/hr → 24.8h</div>
+                  <div class="sku-runway">RUNOUT</div>
+                  <div style="margin-top:4px;">
+                    <span class="sku-tag sku-tag-outline">GRADE 3 / 4.5</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SKU 5 -->
+            <div class="sku-item">
+              <div class="sku-item-rank">5</div>
+              <div class="sku-item-body">
+                <div class="sku-item-info">
+                  <div class="sku-item-name"><a href="#">Cold Brew Concentrate 750ml</a></div>
+                  <div class="sku-item-meta">
+                    SKU: 50917<br>
+                    PROJECTION: 1.6 URS/S / TRD
+                  </div>
+                </div>
+                <div class="sku-item-stats">
+                  <div class="sku-velocity">58 u/hr → 9.1h</div>
+                  <div class="sku-runway">RUNOUT</div>
+                  <div style="margin-top:4px;">
+                    <span class="sku-tag sku-tag-outline">CHILLED ZONE 2 - UNIT47</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Data MCA footer -->
+            <div style="padding:6px 10px; border-top:2px solid #000; font-size:7px; text-transform:uppercase; color:#555; font-family:var(--font-mono); background:var(--bg);">
+              DATA MCA
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGNANT / LOW-FLOW SKUS -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">STAGNANT // LOW-FLOW| SKUS</div>
+            <div class="panel-actions">
+              <span class="capital-eff">CAPITAL EFFICIENCY</span>
+              <span class="panel-badge panel-badge-dark">OVERRIDES</span>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <!-- Stagnant SKU 1 -->
+            <div class="stagnant-item">
+              <div class="stagnant-item-body">
+                <div class="stagnant-item-name">Quinoa Puffs 200g</div>
+                <div class="stagnant-item-meta">
+                  SKU:07192 • AISLE 4-18<br>
+                  DAYS ON SHELF: 22P<br>
+                  <span class="sku-tag sku-tag-outline" style="margin-top:2px;">CLEARANCE</span>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="stagnant-item-score">0.2</div>
+                <div class="stagnant-item-score-label">VEL</div>
+              </div>
+            </div>
+
+            <!-- Stagnant SKU 2 -->
+            <div class="stagnant-item">
+              <div class="stagnant-item-body">
+                <div class="stagnant-item-name">Dragonfruit Extract 100ml</div>
+                <div class="stagnant-item-meta">
+                  SKU:34819 • AISLE 3-2<br>
+                  CART BUNDLES: 0.1 IN 72H<br>
+                  <span class="sku-tag sku-tag-outline" style="margin-top:2px;">CLEARANCE</span>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="stagnant-item-score">0.1</div>
+                <div class="stagnant-item-score-label">VEL</div>
+              </div>
+            </div>
+
+            <!-- Stagnant SKU 3 -->
+            <div class="stagnant-item">
+              <div class="stagnant-item-body">
+                <div class="stagnant-item-name">Smoked Sea Salt 200g</div>
+                <div class="stagnant-item-meta">
+                  SKU:92001 • AISLE 1-08<br>
+                  DAYS ON SHELF: 19 ACTIVE SE<br>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="stagnant-item-score">0.1</div>
+                <div class="stagnant-item-score-label">VEL</div>
+              </div>
+            </div>
+
+            <!-- Stagnant SKU 4 -->
+            <div class="stagnant-item">
+              <div class="stagnant-item-body">
+                <div class="stagnant-item-name">Fermented Tonic Caps $350m</div>
+                <div class="stagnant-item-meta">
+                  SKU:71042<br>
+                  3.FS<br>
+                  STOCK AT VE DADE<br>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="stagnant-item-score">0.3</div>
+                <div class="stagnant-item-score-label">VEL</div>
+              </div>
+            </div>
+
+            <!-- Stagnant footer -->
+            <div class="stagnant-footer">
+              <div class="stagnant-total">
+                <div class="stagnant-total-label">STAGNANT CAPITAL TIED</div>
+                <div class="stagnant-total-value">$3,410.00</div>
+              </div>
+              <div>
+                <span class="stagnant-action-btn">AUTO-MARKDOWN ENABLE</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PREDICTIVE RESTOCKING MATRIX -->
+      <div class="panel" id="restock-matrix">
+        <div class="panel-header">
+          <div class="panel-title">PREDICTIVE RESTOCKING MATRIX // STOCK REACHING RUN-OUT</div>
+          <div class="panel-actions">
+            <div class="auto-po-bar">
+              AUTOMATED PO DISPATCH
+              <div class="toggle-switch"></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-body" style="padding:0;">
+          <div class="table-scroll">
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th>SKU & PRODUCT DESCRIPTION</th>
+                  <th>SHELF<br>QTY</th>
+                  <th>BURN<br>RATE</th>
+                  <th>PROJECTED<br>STOCKOUT</th>
+                  <th>RECOMMENDED PO S</th>
+                  <th>ORDER DISPATCH<br>LEAD</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Row 1 -->
+                <tr>
+                  <td>
+                    <div class="matrix-product-name">Artisan Sourdough 500g</div>
+                    <div class="matrix-product-meta">
+                      SKU:41295 • VENDOR:<br>
+                      RETRO-BAKE MBU
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-size:16px;font-weight:700;font-family:var(--font-sans);">28</div>
+                    <div class="matrix-sub">UNITS</div>
+                  </td>
+                  <td>
+                    <div style="font-size:14px;font-weight:700;font-family:var(--font-sans);">3.1</div>
+                    <div class="matrix-sub">/</div>
+                    <div class="matrix-sub">hr</div>
+                  </td>
+                  <td>
+                    <div class="matrix-badge-today">TODAY 17:45 EST</div>
+                    <div class="matrix-sub">EST. DEPLETED IN<br>5.9 HOURS</div>
+                  </td>
+                  <td>
+                    <div class="matrix-sub">IMMEDIATELY</div>
+                    <div style="font-weight:700;">LEAD: 3.2 HOURS</div>
+                  </td>
+                  <td>
+                    <div class="matrix-action-btn">TRIGGER TO<br>ORDER</div>
+                  </td>
+                </tr>
+
+                <!-- Row 2 -->
+                <tr>
+                  <td>
+                    <div class="matrix-product-name">Oat Milk Barista 1L</div>
+                    <div class="matrix-product-meta">
+                      SKU:04918 • VENDOR: EAT.Y<br>
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-size:16px;font-weight:700;font-family:var(--font-sans);">42</div>
+                    <div class="matrix-sub">UNITS</div>
+                  </td>
+                  <td>
+                    <div style="font-size:14px;font-weight:700;font-family:var(--font-sans);">4.8</div>
+                    <div class="matrix-sub">/</div>
+                    <div class="matrix-sub">hr</div>
+                  </td>
+                  <td>
+                    <div class="matrix-badge-today">TODAY 21:10 EST</div>
+                    <div class="matrix-sub">EST. DEPLETED IN<br>8.9 HOURS</div>
+                  </td>
+                  <td>
+                    <div style="font-weight:700;">TODAY 14:00 EST</div>
+                    <div class="matrix-sub">LEAD: 6.0 HOURS</div>
+                  </td>
+                  <td>
+                    <div class="matrix-action-btn">TRIGGER TO<br>ORDER</div>
+                  </td>
+                </tr>
+
+                <!-- Row 3 -->
+                <tr>
+                  <td>
+                    <div class="matrix-product-name">Pasture Eggs Dozen</div>
+                    <div class="matrix-product-meta">
+                      (Grade A)<br>
+                      SKU:50281<br>
+                      RBESTRIAL CI-HP
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-size:16px;font-weight:700;font-family:var(--font-sans);">26</div>
+                    <div class="matrix-sub">UNITS</div>
+                  </td>
+                  <td>
+                    <div style="font-size:14px;font-weight:700;font-family:var(--font-sans);">4.2</div>
+                    <div class="matrix-sub">/</div>
+                    <div class="matrix-sub">hr</div>
+                  </td>
+                  <td>
+                    <div class="matrix-badge-today">TOMORROW 06:15 EST</div>
+                    <div class="matrix-sub">EST. DEPLETED IN<br>14.1 HOURS</div>
+                  </td>
+                  <td>
+                    <div style="font-weight:700;">TODAY 18:00 EST</div>
+                    <div class="matrix-sub">LEAD: 12.0 HOURS</div>
+                  </td>
+                  <td>
+                    <div class="matrix-action-btn">SCHEDULE<br>CHECK</div>
+                  </td>
+                </tr>
+
+                <!-- Row 4 -->
+                <tr>
+                  <td>
+                    <div class="matrix-product-name">Greek Yogurt Tub Plain 1kg</div>
+                    <div class="matrix-product-meta">
+                      SKU:72004 • VENDOR:<br>
+                      REDGLOW DAIRY
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-size:16px;font-weight:700;font-family:var(--font-sans);">32</div>
+                    <div class="matrix-sub">UNITS</div>
+                  </td>
+                  <td>
+                    <div style="font-size:14px;font-weight:700;font-family:var(--font-sans);">1.9</div>
+                    <div class="matrix-sub">/</div>
+                    <div class="matrix-sub">hr</div>
+                  </td>
+                  <td>
+                    <div class="matrix-badge-today" style="background:#555;">TOMORROW 11:15 EST</div>
+                    <div class="matrix-sub">EST. DEPLETED IN 22<br>HOURS</div>
+                  </td>
+                  <td>
+                    <div style="font-weight:700;">TOMORROW 06:00</div>
+                    <div class="matrix-sub">LEAD: 5.0 HOURS</div>
+                  </td>
+                  <td>
+                    <div class="matrix-action-btn">SCHEDULE<br>CHECK</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="matrix-footer">
+            NOTE: THRESHOLD TRACKING AT RUNOUT • SUPPLIER LEAD = SEE PER SLACK BUFFER • PO ENGINE AUTOCONF[RM ENABLED]
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPIRY TELEMETRY / DYNAMIC MARKDOWN SALE TRIGGER -->
+      <div class="expiry-panel" id="expiry-section">
+        <div class="expiry-header">
+          <div>
+            <div class="expiry-title">⊡ EXPIRY TELEMETRY // DYNAMIC MARKDOWN SALE TRIGGER</div>
+            <div class="expiry-title-sub">CART-SHELF ALERT PROTOCOL • DYNAMIC PROTON DISPLAY</div>
+          </div>
+          <div class="expiry-header-right">
+            <div>TARGET: ACTIVE CART OLED SCREENS</div>
+          </div>
+        </div>
+
+        <div class="expiry-config-bar">
+          <span><strong>RADAR BROADCAST:</strong></span>
+          <span>AUTO-DISPLAYS ON SMART CART OLED & APP NOTIFICATION PUSH WHEN CUSTOMER WALKS PAST</span>
+          <span style="margin-left:auto;"><strong>50 UNITS SK</strong></span>
+          <span>RANGE</span>
+        </div>
+        <div class="expiry-config-bar" style="border-bottom:2px solid #000;">
+          <span><strong>ACTIVE:</strong></span>
+          <span>RELEVANT AISLES</span>
+        </div>
+
+        <div class="expiry-products">
+          <!-- Product 1 -->
+          <div class="expiry-product-card">
+            <span class="expiry-card-tag">EXPIRY/FRESH</span>
+            <span class="expiry-card-qty">29 UNITS</span>
+            <div class="expiry-card-name">Organic Whole Milk 2L</div>
+            <div class="expiry-card-sku">SKU:012984 • AISLE 3 COLD</div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-label">REGULAR PRICE:</span>
+              <span class="expiry-price-old">$4.49</span>
+            </div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-new-label">DYNAMIC PROMO:</span>
+              <span class="expiry-price-new">$2.92</span>
+            </div>
+            <div class="expiry-price-note">PROPOSED DISCOUNT: -35%</div>
+            <button class="expiry-card-btn" id="btn-activate-promo-1">ACTIVATE CART PROMO</button>
+          </div>
+
+          <!-- Product 2 -->
+          <div class="expiry-product-card">
+            <span class="expiry-card-tag" style="background:#555;">EXPIRY/ALERT</span>
+            <span class="expiry-card-qty">24 PACKS</span>
+            <div class="expiry-card-name">Croissant 6 Pack</div>
+            <div class="expiry-card-sku">SKU:41290B • BAKERY TABLE</div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-label">REGULAR PRICE:</span>
+              <span class="expiry-price-old">$4.90</span>
+            </div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-new-label">FLASH SALE:</span>
+              <span class="expiry-price-new">$3.00</span>
+            </div>
+            <div class="expiry-price-note">PROPOSED DISCOUNT: -40%</div>
+            <button class="expiry-card-btn" id="btn-broadcast-carts">BROADCAST TO CARTS</button>
+          </div>
+
+          <!-- Product 3 -->
+          <div class="expiry-product-card">
+            <span class="expiry-card-tag">EXPIRY/FRESH</span>
+            <span class="expiry-card-qty">15 MEALS</span>
+            <div class="expiry-card-name">Prepared Caesar Salad</div>
+            <div class="expiry-card-sku">SKU:88216 • DELI GRAS-NE</div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-label">REGULAR PRICE:</span>
+              <span class="expiry-price-old">$6.99</span>
+            </div>
+            <div class="expiry-price-row">
+              <span class="expiry-price-new-label">DYNAMIC PROMO:</span>
+              <span class="expiry-price-new">$5.10</span>
+            </div>
+            <div class="expiry-price-note"></div>
+            <button class="expiry-card-btn" id="btn-push-cart-screens">PUSH TO CART SCREENS</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM CONTROL BAR -->
+      <div class="bottom-bar" id="bottom-controls">
+        <div class="bottom-bar-section">
+          <div>
+            <div class="bottom-bar-label">RESTOCK</div>
+            <div class="bottom-bar-sublabel">ENGINE:</div>
+            <div class="bottom-bar-label">AUTONOMOUS</div>
+          </div>
+          <div class="bottom-bar-meta">
+            <div><span class="icon-dot icon-dot-green"></span> ACTIVE SESSION</div>
+            <div>MODEL: E2M 7 R3R</div>
+          </div>
+          <div class="bottom-bar-meta">
+            <div>CART PUSH LATENCY:</div>
+            <div>CORE CONNECTIONR2C</div>
+          </div>
+        </div>
+
+        <div class="bottom-bar-section" style="gap:8px;">
+          <button class="bottom-btn" id="btn-export-sheet">▢ EXPORT SHEET CSV</button>
+          <button class="bottom-btn bottom-btn-dark" id="btn-print-manifest">✦ PRINT REORDER MANIFEST</button>
+          <button class="bottom-btn bottom-btn-warning" id="btn-emergency-override">EMERGENCY REGIONAL OVERRIDE</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+</body>
+</html>

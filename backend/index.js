@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { initDb } = require('./db');
 const rfidRoutes = require('./routes/rfid');
 
@@ -14,6 +15,14 @@ const corsOptions = process.env.CORS_ORIGIN
   : {};
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Operations Console page
+app.get('/ops-console', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'ops-console.html'));
+});
 
 // Routes
 app.use('/api/rfid', rfidRoutes);
