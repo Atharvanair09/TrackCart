@@ -27,6 +27,9 @@ describe('Session APIs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+  afterEach(() => {
+    mockPool.connect.mockResolvedValue(mockClient);
+  });
 
   describe('POST /api/sessions', () => {
     beforeEach(() => {
@@ -112,28 +115,62 @@ describe('Session APIs', () => {
   describe('POST /api/sessions/:sessionId/end', () => {
     test('should complete a checkout via /checkout (TEST 9)', async () => {
       // Mock client connection and queries
-      const mockClient = {
-        query: jest.fn((queryText, params) => {
-          if (queryText.includes('UPDATE shopping_sessions')) {
-            return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'completed' }] });
-          }
-          if (queryText.includes('SELECT * FROM sales')) {
-            return Promise.resolve({ rows: [] }); // No existing sale
-          }
-          if (queryText.includes('SELECT ci.*, p.price')) {
-            // Return one cart item
-            return Promise.resolve({ rows: [{ product_id: 'PROD01', unit_price_at_addition: 10, quantity: 2 }] });
-          }
-          if (queryText.includes('INSERT INTO sales')) {
-            return Promise.resolve({ rows: [{ sale_id: 'SALE_123', subtotal: 20, tax_rate: 0.0825, tax_amount: 1.65, total: 21.65 }] });
-          }
-          if (queryText.includes('INSERT INTO sale_line_items')) {
-            return Promise.resolve();
-          }
+    const mockClient = {
+      query: jest.fn((queryText, params) => {
+        if (
+          queryText.includes('FROM shopping_sessions') &&
+          queryText.includes('FOR UPDATE')
+        ) {
+          return Promise.resolve({
+            rows: [{ session_id: 'SESS_TEST', status: 'active' }]
+          });
+        }
+
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [] }); // No existing sale
+        }
+
+        if (queryText.includes('SELECT ci.*, p.price')) {
+          // Return one cart item
+          return Promise.resolve({
+            rows: [{
+              product_id: 'PROD01',
+              unit_price_at_addition: 10,
+              quantity: 2
+            }]
+          });
+        }
+
+        if (queryText.includes('UPDATE products SET inventory_qty')) {
+          return Promise.resolve({ rowCount: 1 });
+        }
+
+        if (queryText.includes('INSERT INTO sales')) {
+          return Promise.resolve({
+            rows: [{
+              sale_id: 'SALE_123',
+              subtotal: 20,
+              tax_rate: 0.0825,
+              tax_amount: 1.65,
+              total: 21.65
+            }]
+          });
+        }
+
+        if (queryText.includes('INSERT INTO sale_line_items')) {
           return Promise.resolve({ rows: [] });
-        }),
-        release: jest.fn()
-      };
+        }
+
+        if (queryText.includes('UPDATE shopping_sessions')) {
+          return Promise.resolve({
+            rows: [{ session_id: 'SESS_TEST', status: 'completed' }]
+          });
+        }
+
+        return Promise.resolve({ rows: [] });
+      }),
+      release: jest.fn()
+    };
       // mock pool.connect to return our mock client
       mockPool.connect.mockResolvedValue(mockClient);
 
@@ -229,4 +266,231 @@ describe('Session APIs', () => {
       expect(res.body.error).toBe('Item not found in cart');
     });
   });
+  // Inventory deduction tests
+  describe('Inventory deduction during checkout', () => {
+    test('should deduct inventory on successful checkout', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (queryText.includes('FROM cart_items')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD01', quantity: 2, unit_price_at_addition: 10 }] });
+        }
+        if (queryText.includes('UPDATE products SET inventory_qty')) {
+          return Promise.resolve({ rowCount: 1 });
+        }
+        if (queryText.includes('INSERT INTO sales')) {
+          return Promise.resolve({ rows: [{ sale_id: 'SALE_123', subtotal: 20, tax_rate: 0.0825, tax_amount: 1.65, total: 21.65 }] });
+        }
+        if (queryText.includes('INSERT INTO sale_line_items')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('UPDATE shopping_sessions SET status')) {
+          return Promise.resolve();
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toHaveProperty('sale_id');
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE products SET inventory_qty'),
+        [2, 'PROD01']
+      );
+        // Verify transaction commit and no rollback
+        const commitCalls = mockClient.query.mock.calls.filter(call => call[0].includes('COMMIT'));
+        expect(commitCalls.length).toBe(1);
+        expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('ROLLBACK'));
+
+        // Verify inventory deduction called once per product with correct qty
+        const inventoryCalls = mockClient.query.mock.calls.filter(call => call[0].includes('UPDATE products SET inventory_qty'));
+        expect(inventoryCalls.length).toBe(1);
+        expect(inventoryCalls[0][1]).toEqual([2, 'PROD01']);
+
+        // Verify sale insertion and session status update
+        expect(
+          mockClient.query.mock.calls.some(call =>
+            call[0].includes('INSERT INTO sales')
+          )
+        ).toBe(true);
+
+        expect(
+          mockClient.query.mock.calls.some(call =>
+            call[0].includes('UPDATE shopping_sessions SET status')
+          )
+        ).toBe(true);
+
+        // Verify response shape contains expected fields
+        expect(res.body).toMatchObject({
+          sale_id: expect.any(String),
+          subtotal: expect.any(Number),
+          tax_rate: expect.any(Number),
+          tax_amount: expect.any(Number),
+          total: expect.any(Number)
+        });
+    });
+
+    test('should return 400 when inventory insufficient', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (queryText.includes('FROM cart_items')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD02', quantity: 5, unit_price_at_addition: 10 }] });
+        }
+        if (queryText.includes('UPDATE products SET inventory_qty')) {
+          return Promise.resolve({ rowCount: 0 });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toMatch(/Insufficient stock/);
+      // Verify rollback occurred and no commit
+      expect(mockClient.query).toHaveBeenCalledWith(expect.stringContaining('ROLLBACK'));
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('COMMIT'));
+      // Ensure no sale or session update was attempted
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO sales'));
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE shopping_sessions SET status'));
+    expect(mockClient.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE products SET inventory_qty'), [5, 'PROD02']);
+    });
+
+    test('inventory update throws triggers 500 and rollback', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('BEGIN') || queryText.includes('COMMIT') || queryText.includes('ROLLBACK')) {
+          return Promise.resolve();
+        }
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (queryText.includes('FROM cart_items')) {
+          return Promise.resolve({ rows: [{ product_id: 'PROD99', quantity: 1, unit_price_at_addition: 10 }] });
+        }
+        if (queryText.includes('UPDATE products SET inventory_qty')) {
+          return Promise.reject(new Error('DB failure'));
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+      // Verify rollback occurred and no commit
+      expect(mockClient.query).toHaveBeenCalledWith(expect.stringContaining('ROLLBACK'));
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('COMMIT'));
+      // Ensure no sale or session update was performed
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO sales'));
+      expect(mockClient.query).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE shopping_sessions SET status'));
+    });
+
+    test('repeated checkout is idempotent and does not deduct again', async () => {
+  const sale = {
+    sale_id: 'SALE_1',
+    subtotal: 5,
+    tax_rate: 0.0825,
+    tax_amount: 0.41,
+    total: 5.41
+  };
+
+  let saleCreated = false;
+
+  mockClient.query.mockImplementation((queryText, params) => {
+    if (
+      queryText.includes('BEGIN') ||
+      queryText.includes('COMMIT') ||
+      queryText.includes('ROLLBACK')
+    ) {
+      return Promise.resolve();
+    }
+
+    if (
+      queryText.includes('FROM shopping_sessions') &&
+      queryText.includes('FOR UPDATE')
+    ) {
+      return Promise.resolve({
+        rows: [{ session_id: 'SESS_TEST', status: 'active' }]
+      });
+    }
+
+    if (queryText.includes('SELECT * FROM sales')) {
+      return Promise.resolve({
+        rows: saleCreated ? [sale] : []
+      });
+    }
+
+    if (queryText.includes('FROM cart_items')) {
+      return Promise.resolve({
+        rows: [{
+          product_id: 'PROD03',
+          quantity: 1,
+          unit_price_at_addition: 5
+        }]
+      });
+    }
+
+    if (queryText.includes('UPDATE products SET inventory_qty')) {
+      return Promise.resolve({ rowCount: 1 });
+    }
+
+    if (queryText.includes('INSERT INTO sales')) {
+      saleCreated = true;
+      return Promise.resolve({ rows: [sale] });
+    }
+
+    if (queryText.includes('INSERT INTO sale_line_items')) {
+      return Promise.resolve({ rows: [] });
+    }
+
+    if (queryText.includes('UPDATE shopping_sessions SET status')) {
+      return Promise.resolve({ rows: [] });
+    }
+
+    return Promise.resolve({ rows: [] });
+  });
+
+  const first = await request(app)
+    .post('/api/sessions/SESS_TEST/checkout');
+
+  expect(first.statusCode).toBe(200);
+  expect(first.body.sale_id).toBe('SALE_1');
+
+  const second = await request(app)
+    .post('/api/sessions/SESS_TEST/checkout');
+
+  expect(second.statusCode).toBe(200);
+  expect(second.body.sale_id).toBe('SALE_1');
+
+  const saleInsertCalls = mockClient.query.mock.calls.filter(
+    call => call[0].includes('INSERT INTO sales')
+  );
+  expect(saleInsertCalls).toHaveLength(1);
+
+  const lineItemInsertCalls = mockClient.query.mock.calls.filter(
+    call => call[0].includes('INSERT INTO sale_line_items')
+  );
+  expect(lineItemInsertCalls).toHaveLength(1);
+
+  const inventoryCalls = mockClient.query.mock.calls.filter(
+    call => call[0].includes('UPDATE products SET inventory_qty')
+  );
+  expect(inventoryCalls).toHaveLength(1);
+});
+});
 });

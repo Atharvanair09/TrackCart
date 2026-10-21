@@ -85,26 +85,46 @@ router.post('/:sessionId/checkout', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Verify session exists and is active
-    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2', [sessionId, 'active']);
+    // Verify session exists and is active, lock the row for concurrency safety
+    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2 FOR UPDATE', [sessionId, 'active']);
     if (sessionRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Invalid or inactive session' });
     }
-    // Check if sale already exists for this session (idempotent)
+    // Idempotency: if a sale already exists for this session, return it without modifying inventory
     const existingSale = await client.query('SELECT * FROM sales WHERE session_id = $1', [sessionId]);
     if (existingSale.rows.length > 0) {
-      // Sale already recorded, return it
       await client.query('COMMIT');
       return res.status(200).json(existingSale.rows[0]);
     }
-    // Fetch cart items for calculation
-    const itemsRes = await client.query('SELECT ci.*, p.price FROM cart_items ci JOIN products p ON ci.product_id = p.product_id WHERE ci.session_id = $1', [sessionId]);
+    // Fetch cart items ordered by product_id to lock products deterministically
+    const itemsRes = await client.query(
+      `SELECT ci.*, p.price, p.product_id FROM cart_items ci 
+       JOIN products p ON ci.product_id = p.product_id 
+       WHERE ci.session_id = $1 
+       ORDER BY ci.product_id ASC`,
+      [sessionId]
+    );
     if (itemsRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Cart is empty, cannot checkout' });
     }
-    // Calculate totals
+    // Validate inventory for each product and deduct atomically
+    for (const item of itemsRes.rows) {
+      const qty = item.quantity;
+      const productId = item.product_id;
+      // Guarded update ensures sufficient stock; rowCount === 1 means deduction succeeded
+      const updRes = await client.query(
+        'UPDATE products SET inventory_qty = inventory_qty - $1 WHERE product_id = $2 AND inventory_qty >= $1',
+        [qty, productId]
+      );
+      if (updRes.rowCount !== 1) {
+        // Insufficient stock or product missing – abort checkout
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Insufficient stock for product ${productId}` });
+      }
+    }
+    // Calculate totals after successful inventory checks
     const subtotal = itemsRes.rows.reduce((sum, i) => sum + (i.unit_price_at_addition * i.quantity), 0);
     const taxRate = 0.0825;
     const taxAmount = parseFloat((subtotal * taxRate).toFixed(2));
@@ -116,7 +136,7 @@ router.post('/:sessionId/checkout', async (req, res) => {
       [saleId, sessionId, subtotal, taxRate, taxAmount, total]
     );
     const saleRecord = saleInsert.rows[0];
-    // Insert line items
+    // Insert line items for each cart item
     const lineItemPromises = itemsRes.rows.map(item => {
       const lineSubtotal = parseFloat((item.unit_price_at_addition * item.quantity).toFixed(2));
       return client.query(
