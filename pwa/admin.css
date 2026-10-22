@@ -1884,3 +1884,77 @@ body.admin-body {
     display: none;
   }
 }
+
+/* ============================================================
+   Inline Detail Panels (Sessions & Sales)
+   ============================================================ */
+.admin-detail-panel {
+  margin: 12px 16px;
+  border: var(--admin-border-thick);
+  background: #ffffff;
+  box-shadow: var(--admin-shadow-brutal);
+}
+
+.admin-detail-panel .admin-modal-header {
+  border-bottom: var(--admin-border-thin);
+  padding: 12px 16px;
+}
+
+.admin-detail-panel .drawer-body {
+  padding: 16px;
+}
+
+.admin-detail-panel .drawer-telemetry-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #fafafa;
+  border: var(--admin-border-subtle);
+  margin-bottom: 16px;
+}
+
+.admin-detail-panel .telemetry-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-detail-panel .telemetry-item .label {
+  font-size: 0.65rem;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.admin-detail-panel .telemetry-item strong {
+  font-size: 0.8rem;
+  color: #000;
+}
+
+/* Session status badges */
+.session-status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+
+.session-status-active {
+  background: var(--admin-accent-green-bg);
+  color: var(--admin-accent-green);
+  border-color: var(--admin-accent-green);
+}
+
+.session-status-completed {
+  background: var(--admin-accent-blue-bg);
+  color: var(--admin-accent-blue);
+  border-color: var(--admin-accent-blue);
+}
+
+.session-status-cancelled {
+  background: var(--admin-accent-amber-bg);
+  color: var(--admin-accent-amber);
+  border-color: var(--admin-accent-amber);
+}

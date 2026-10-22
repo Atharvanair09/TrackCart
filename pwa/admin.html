@@ -49,6 +49,12 @@
           <button class="nav-tab" data-tab="movements">
             <span class="tab-icon">📜</span> STOCK MOVEMENTS
           </button>
+          <button class="nav-tab" data-tab="sessions">
+            <span class="tab-icon">🛒</span> SESSIONS
+          </button>
+          <button class="nav-tab" data-tab="sales">
+            <span class="tab-icon">💰</span> SALES HISTORY
+          </button>
         </div>
 
         <div class="admin-nav-right-actions">
@@ -599,6 +605,253 @@
                 <!-- Populated dynamically via JS -->
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- TAB VIEW 4: SHOPPING SESSIONS                         -->
+        <!-- ==================================================== -->
+        <section id="view-sessions" class="admin-tab-view">
+          <div class="movements-header-panel font-mono">
+            <div class="movements-title-group">
+              <span class="hud-pill">[SESSION_MGMT]</span>
+              <h2>SHOPPING SESSION MANAGEMENT</h2>
+              <span class="meta-tag right">RFID CART SESSIONS</span>
+            </div>
+
+            <div class="movements-filter-row">
+              <div class="filter-item">
+                <label>FILTER BY STATUS:</label>
+                <select id="session-status-filter" class="admin-select-sm">
+                  <option value="ALL">ALL SESSIONS</option>
+                  <option value="active">ACTIVE</option>
+                  <option value="completed">COMPLETED</option>
+                  <option value="cancelled">CANCELLED</option>
+                </select>
+              </div>
+              <button id="btn-refresh-sessions" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
+                <span>🔄</span> REFRESH SESSIONS
+              </button>
+            </div>
+          </div>
+
+          <!-- Sessions Summary Chips -->
+          <div class="inventory-summary-chips" style="padding: 0 16px 12px;">
+            <div class="inv-chip">
+              <span class="chip-label">TOTAL:</span>
+              <strong class="chip-val" id="sessions-total-count">0</strong>
+            </div>
+            <div class="inv-chip chip-highlight">
+              <span class="chip-label">ACTIVE:</span>
+              <strong class="chip-val" id="sessions-active-count">0</strong>
+            </div>
+            <div class="inv-chip">
+              <span class="chip-label">COMPLETED:</span>
+              <strong class="chip-val" id="sessions-completed-count">0</strong>
+            </div>
+            <div class="inv-chip">
+              <span class="chip-label">CANCELLED:</span>
+              <strong class="chip-val" id="sessions-cancelled-count">0</strong>
+            </div>
+          </div>
+
+          <div class="movements-table-wrapper">
+            <table class="hud-inventory-table font-mono">
+              <thead>
+                <tr>
+                  <th>SESSION ID</th>
+                  <th>CART ID</th>
+                  <th>STATUS</th>
+                  <th class="text-right">ITEMS</th>
+                  <th class="text-right">SUBTOTAL</th>
+                  <th>STARTED AT</th>
+                  <th>ENDED AT</th>
+                  <th>SALE ID</th>
+                  <th class="text-center">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="sessions-table-body">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Session Detail Drawer -->
+          <div id="session-detail-panel" class="admin-detail-panel hidden font-mono">
+            <div class="admin-modal-header">
+              <div class="modal-header-title">
+                <span class="modal-icon">🛒</span>
+                <h3 id="session-detail-title">SESSION DETAILS</h3>
+              </div>
+              <button class="modal-close-btn" id="btn-close-session-detail">✕</button>
+            </div>
+            <div class="drawer-body">
+              <div class="drawer-telemetry-banner">
+                <div class="telemetry-item">
+                  <span class="label">SESSION:</span>
+                  <strong id="sess-detail-id">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">CART:</span>
+                  <strong id="sess-detail-cart">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">STATUS:</span>
+                  <strong id="sess-detail-status">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">STARTED:</span>
+                  <strong id="sess-detail-started">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">ENDED:</span>
+                  <strong id="sess-detail-ended">—</strong>
+                </div>
+              </div>
+
+              <div class="drawer-spec-panel">
+                <div class="spec-panel-header">CART ITEMS</div>
+                <div class="drawer-mini-table-wrap">
+                  <table class="hud-inventory-table mini font-mono">
+                    <thead>
+                      <tr>
+                        <th>PRODUCT</th>
+                        <th>CATEGORY</th>
+                        <th class="text-right">QTY</th>
+                        <th class="text-right">UNIT PRICE</th>
+                        <th class="text-right">SUBTOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sess-detail-items-tbody">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- TAB VIEW 5: SALES HISTORY                             -->
+        <!-- ==================================================== -->
+        <section id="view-sales" class="admin-tab-view">
+          <div class="movements-header-panel font-mono">
+            <div class="movements-title-group">
+              <span class="hud-pill">[SALES_LEDGER]</span>
+              <h2>COMPLETED SALES TRANSACTION HISTORY</h2>
+              <span class="meta-tag right">POS SETTLEMENT RECORDS</span>
+            </div>
+
+            <div class="movements-filter-row">
+              <div class="filter-item">
+                <label>FROM:</label>
+                <input type="date" id="sales-filter-start" class="admin-input-date" />
+              </div>
+              <div class="filter-item">
+                <label>TO:</label>
+                <input type="date" id="sales-filter-end" class="admin-input-date" />
+              </div>
+              <button id="btn-apply-sales-filter" class="admin-btn-dark-sm font-mono">
+                <span>🔍</span> APPLY FILTER
+              </button>
+              <button id="btn-refresh-sales" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
+                <span>🔄</span> REFRESH SALES
+              </button>
+            </div>
+          </div>
+
+          <!-- Sales Summary Chips -->
+          <div class="inventory-summary-chips" style="padding: 0 16px 12px;">
+            <div class="inv-chip">
+              <span class="chip-label">TOTAL SALES:</span>
+              <strong class="chip-val" id="sales-total-count">0</strong>
+            </div>
+            <div class="inv-chip chip-highlight">
+              <span class="chip-label">TOTAL REVENUE:</span>
+              <strong class="chip-val" id="sales-total-revenue">$0.00</strong>
+            </div>
+            <div class="inv-chip">
+              <span class="chip-label">TOTAL TAX:</span>
+              <strong class="chip-val" id="sales-total-tax">$0.00</strong>
+            </div>
+          </div>
+
+          <div class="movements-table-wrapper">
+            <table class="hud-inventory-table font-mono">
+              <thead>
+                <tr>
+                  <th>SALE ID</th>
+                  <th>SESSION ID</th>
+                  <th class="text-right">ITEMS</th>
+                  <th class="text-right">SUBTOTAL</th>
+                  <th class="text-right">TAX</th>
+                  <th class="text-right">TOTAL</th>
+                  <th>COMPLETED AT</th>
+                  <th class="text-center">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="sales-table-body">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Sale Detail Drawer -->
+          <div id="sale-detail-panel" class="admin-detail-panel hidden font-mono">
+            <div class="admin-modal-header">
+              <div class="modal-header-title">
+                <span class="modal-icon">💰</span>
+                <h3 id="sale-detail-title">SALE DETAILS</h3>
+              </div>
+              <button class="modal-close-btn" id="btn-close-sale-detail">✕</button>
+            </div>
+            <div class="drawer-body">
+              <div class="drawer-telemetry-banner">
+                <div class="telemetry-item">
+                  <span class="label">SALE ID:</span>
+                  <strong id="sale-detail-id">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">SESSION:</span>
+                  <strong id="sale-detail-session">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">SUBTOTAL:</span>
+                  <strong id="sale-detail-subtotal">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">TAX (8.25%):</span>
+                  <strong id="sale-detail-tax">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">TOTAL:</span>
+                  <strong id="sale-detail-total" class="text-accent-green">—</strong>
+                </div>
+                <div class="telemetry-item">
+                  <span class="label">COMPLETED:</span>
+                  <strong id="sale-detail-completed">—</strong>
+                </div>
+              </div>
+
+              <div class="drawer-spec-panel">
+                <div class="spec-panel-header">LINE ITEMS</div>
+                <div class="drawer-mini-table-wrap">
+                  <table class="hud-inventory-table mini font-mono">
+                    <thead>
+                      <tr>
+                        <th>PRODUCT</th>
+                        <th>CATEGORY</th>
+                        <th class="text-right">QTY</th>
+                        <th class="text-right">UNIT PRICE</th>
+                        <th class="text-right">LINE SUBTOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sale-detail-items-tbody">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>

@@ -98,6 +98,9 @@ let movements = [];
 let dbKPIs = null;
 let dbAnalytics = null;
 let isFirstLoad = true;
+let sessionsData = [];
+let salesData = [];
+let salesTotals = { count: 0, revenue: 0, tax: 0 };
 
 // Active Filters State
 let analyticsFilter = {
@@ -928,7 +931,7 @@ function openAddProductModal(editProduct = null) {
     document.getElementById('prod-price').value = editProduct.price;
     document.getElementById('prod-reorder').value = editProduct.reorderLevel;
     document.getElementById('prod-safety').value = editProduct.safetyStock;
-    document.getElementById('prod-leadTime').value = editProduct.leadTimeDays;
+    document.getElementById('prod-lead-time').value = editProduct.leadTimeDays;
     document.getElementById('prod-onhand').value = editProduct.onHand;
   } else {
     title.textContent = 'ADD NEW PRODUCT TO DATABASE';
@@ -974,6 +977,12 @@ function setupEventListeners() {
       } else if (target === 'movements') {
         document.getElementById('view-movements').classList.add('active');
         renderMovementsTable();
+      } else if (target === 'sessions') {
+        document.getElementById('view-sessions').classList.add('active');
+        loadSessionsData();
+      } else if (target === 'sales') {
+        document.getElementById('view-sales').classList.add('active');
+        loadSalesData();
       }
     });
   });
@@ -1037,7 +1046,7 @@ function setupEventListeners() {
     e.preventDefault();
     const token = getAuthToken();
     const prodId = document.getElementById('restock-product-select').value;
-    const type = document.getElementById('restock-type').value;
+    const type = document.getElementById('restock-mode').value;
     const qty = parseInt(document.getElementById('restock-qty').value, 10);
     const poNumber = document.getElementById('restock-po').value;
     const notes = document.getElementById('restock-notes').value;
@@ -1113,7 +1122,7 @@ function setupEventListeners() {
     const onHand = parseInt(document.getElementById('prod-onhand').value, 10) || 0;
     const reorderLevel = parseInt(document.getElementById('prod-reorder').value, 10) || 10;
     const safetyStock = parseInt(document.getElementById('prod-safety').value, 10) || 5;
-    const leadTimeDays = parseInt(document.getElementById('prod-leadTime').value, 10) || 3;
+    const leadTimeDays = parseInt(document.getElementById('prod-lead-time').value, 10) || 3;
 
     const payload = {
       id, rfid, name, category, supplier,
@@ -1260,10 +1269,393 @@ function setupEventListeners() {
     analyticsFilter.productId = e.target.value;
     updateAnalyticsFilters();
   });
+
+  // -- Sessions Tab Event Listeners --
+  document.getElementById('session-status-filter')?.addEventListener('change', () => loadSessionsData());
+  document.getElementById('btn-refresh-sessions')?.addEventListener('click', () => loadSessionsData());
+  document.getElementById('btn-close-session-detail')?.addEventListener('click', () => {
+    document.getElementById('session-detail-panel')?.classList.add('hidden');
+  });
+
+  // -- Sales Tab Event Listeners --
+  document.getElementById('btn-refresh-sales')?.addEventListener('click', () => loadSalesData());
+  document.getElementById('btn-apply-sales-filter')?.addEventListener('click', () => loadSalesData());
+  document.getElementById('btn-close-sale-detail')?.addEventListener('click', () => {
+    document.getElementById('sale-detail-panel')?.classList.add('hidden');
+  });
+
+  // Restock mode tabs
+  document.querySelectorAll('.restock-mode-tabs .mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.restock-mode-tabs .mode-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const mode = tab.dataset.mode;
+      const modeInput = document.getElementById('restock-mode');
+      if (modeInput) modeInput.value = mode === 'damaged' ? 'DAMAGE_WRITEOFF' : 'RESTOCK';
+      const incoming = document.getElementById('restock-fields-incoming');
+      const damaged = document.getElementById('restock-fields-damaged');
+      const qtyLabel = document.getElementById('restock-qty-label');
+      const submitBtn = document.getElementById('btn-submit-restock');
+      if (mode === 'damaged') {
+        if (incoming) incoming.classList.add('hidden');
+        if (damaged) damaged.classList.remove('hidden');
+        if (qtyLabel) qtyLabel.textContent = 'QUANTITY DAMAGED / EXPIRED (UNITS) *';
+        if (submitBtn) submitBtn.textContent = 'RECORD DAMAGE WRITE-OFF';
+      } else {
+        if (incoming) incoming.classList.remove('hidden');
+        if (damaged) damaged.classList.add('hidden');
+        if (qtyLabel) qtyLabel.textContent = 'QUANTITY RECEIVED (UNITS) *';
+        if (submitBtn) submitBtn.textContent = 'RECORD SHIPMENT INVENTORY';
+      }
+    });
+  });
+
+  // Low stock card click -> switch to inventory with Low Stock filter
+  document.getElementById('kpi-card-low-stock')?.addEventListener('click', () => {
+    // Switch to inventory tab
+    const tabs = document.querySelectorAll('#admin-top-nav .nav-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    const invTab = document.querySelector('[data-tab="inventory"]');
+    if (invTab) invTab.classList.add('active');
+    document.querySelectorAll('.admin-tab-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-inventory')?.classList.add('active');
+    // Set filter to Low Stock
+    const statusFilter = document.getElementById('inv-status-filter');
+    if (statusFilter) statusFilter.value = 'Low stock';
+    inventoryFilter.status = 'Low stock';
+    renderInventoryTable();
+  });
+
+  // Close modal buttons
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeModal(btn.dataset.closeModal);
+    });
+  });
 }
 
 // ==========================================
-// 10. Application Bootstrap
+// 10. Sessions Data Loading & Rendering
+// ==========================================
+async function loadSessionsData() {
+  const token = getAuthToken();
+  if (!token) return;
+
+  const statusFilter = document.getElementById('session-status-filter')?.value || 'ALL';
+
+  try {
+    const url = `${API_BASE}/admin/sessions?status=${statusFilter}&limit=50`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.status === 401) {
+      window.location.replace('/admin-login.html');
+      return;
+    }
+
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+    const data = await res.json();
+    if (data.success) {
+      sessionsData = data.sessions || [];
+      renderSessionsTable();
+    }
+  } catch (err) {
+    console.error('Failed to load sessions:', err);
+    showToast('Error loading sessions: ' + err.message, 'error');
+  }
+}
+
+function renderSessionsTable() {
+  const tbody = document.getElementById('sessions-table-body');
+  if (!tbody) return;
+
+  // Update summary chips
+  const activeCount = sessionsData.filter(s => s.status === 'active').length;
+  const completedCount = sessionsData.filter(s => s.status === 'completed').length;
+  const cancelledCount = sessionsData.filter(s => s.status === 'cancelled').length;
+
+  const elTotal = document.getElementById('sessions-total-count');
+  const elActive = document.getElementById('sessions-active-count');
+  const elCompleted = document.getElementById('sessions-completed-count');
+  const elCancelled = document.getElementById('sessions-cancelled-count');
+
+  if (elTotal) elTotal.textContent = String(sessionsData.length);
+  if (elActive) elActive.textContent = String(activeCount);
+  if (elCompleted) elCompleted.textContent = String(completedCount);
+  if (elCancelled) elCancelled.textContent = String(cancelledCount);
+
+  if (sessionsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:24px;">NO SESSIONS FOUND IN DATABASE</td></tr>`;
+    return;
+  }
+
+  let html = '';
+  sessionsData.forEach(s => {
+    const statusClass = `session-status-${s.status}`;
+    html += `
+      <tr>
+        <td><strong>${s.session_id}</strong></td>
+        <td>${s.cart_id || '—'}</td>
+        <td><span class="session-status-pill ${statusClass}">${s.status.toUpperCase()}</span></td>
+        <td class="text-right">${s.item_count}</td>
+        <td class="text-right">${formatCurrency(s.subtotal)}</td>
+        <td>${s.started_at || '—'}</td>
+        <td>${s.ended_at || '—'}</td>
+        <td>${s.sale_id || '—'}</td>
+        <td class="text-center">
+          <button class="btn-row-action btn-row-view btn-session-detail" data-session-id="${s.session_id}">👁 DETAIL</button>
+        </td>
+      </tr>
+    `;
+  });
+  tbody.innerHTML = html;
+
+  // Attach detail buttons
+  document.querySelectorAll('.btn-session-detail').forEach(btn => {
+    btn.addEventListener('click', () => openSessionDetail(btn.dataset.sessionId));
+  });
+}
+
+function openSessionDetail(sessionId) {
+  const sess = sessionsData.find(s => s.session_id === sessionId);
+  if (!sess) return;
+
+  document.getElementById('session-detail-title').textContent = `SESSION: ${sess.session_id}`;
+  document.getElementById('sess-detail-id').textContent = sess.session_id;
+  document.getElementById('sess-detail-cart').textContent = sess.cart_id || '—';
+  document.getElementById('sess-detail-status').textContent = sess.status.toUpperCase();
+  document.getElementById('sess-detail-started').textContent = sess.started_at || '—';
+  document.getElementById('sess-detail-ended').textContent = sess.ended_at || '—';
+
+  const itemsTbody = document.getElementById('sess-detail-items-tbody');
+  if (itemsTbody) {
+    if (!sess.items || sess.items.length === 0) {
+      itemsTbody.innerHTML = '<tr><td colspan="5" class="text-center">No items in cart</td></tr>';
+    } else {
+      itemsTbody.innerHTML = sess.items.map(item => `
+        <tr>
+          <td><strong>${item.name}</strong> <span style="font-size:0.65rem;color:#666;">(${item.product_id})</span></td>
+          <td>${item.category || '—'}</td>
+          <td class="text-right">${item.quantity}</td>
+          <td class="text-right">${formatCurrency(item.unit_price_at_addition)}</td>
+          <td class="text-right">${formatCurrency(item.subtotal)}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  document.getElementById('session-detail-panel')?.classList.remove('hidden');
+}
+
+// ==========================================
+// 11. Sales Data Loading & Rendering
+// ==========================================
+async function loadSalesData() {
+  const token = getAuthToken();
+  if (!token) return;
+
+  const startDate = document.getElementById('sales-filter-start')?.value || '';
+  const endDate = document.getElementById('sales-filter-end')?.value || '';
+
+  let url = `${API_BASE}/admin/sales?limit=100`;
+  if (startDate && endDate) {
+    url += `&startDate=${startDate}&endDate=${endDate}`;
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.status === 401) {
+      window.location.replace('/admin-login.html');
+      return;
+    }
+
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+    const data = await res.json();
+    if (data.success) {
+      salesData = data.sales || [];
+      salesTotals = data.totals || { count: 0, revenue: 0, tax: 0 };
+      renderSalesTable();
+    }
+  } catch (err) {
+    console.error('Failed to load sales:', err);
+    showToast('Error loading sales: ' + err.message, 'error');
+  }
+}
+
+function renderSalesTable() {
+  const tbody = document.getElementById('sales-table-body');
+  if (!tbody) return;
+
+  // Update summary chips
+  const elCount = document.getElementById('sales-total-count');
+  const elRevenue = document.getElementById('sales-total-revenue');
+  const elTax = document.getElementById('sales-total-tax');
+
+  if (elCount) elCount.textContent = String(salesTotals.count);
+  if (elRevenue) elRevenue.textContent = formatCurrency(salesTotals.revenue);
+  if (elTax) elTax.textContent = formatCurrency(salesTotals.tax);
+
+  if (salesData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="padding:24px;">NO SALES RECORDS FOUND</td></tr>`;
+    return;
+  }
+
+  let html = '';
+  salesData.forEach(sale => {
+    html += `
+      <tr>
+        <td><strong>${sale.sale_id}</strong></td>
+        <td>${sale.session_id || '—'}</td>
+        <td class="text-right">${sale.item_count}</td>
+        <td class="text-right">${formatCurrency(sale.subtotal)}</td>
+        <td class="text-right">${formatCurrency(sale.tax_amount)}</td>
+        <td class="text-right"><strong>${formatCurrency(sale.total)}</strong></td>
+        <td>${sale.completed_at || '—'}</td>
+        <td class="text-center">
+          <button class="btn-row-action btn-row-view btn-sale-detail" data-sale-id="${sale.sale_id}">👁 DETAIL</button>
+        </td>
+      </tr>
+    `;
+  });
+  tbody.innerHTML = html;
+
+  // Attach detail buttons
+  document.querySelectorAll('.btn-sale-detail').forEach(btn => {
+    btn.addEventListener('click', () => openSaleDetail(btn.dataset.saleId));
+  });
+}
+
+function openSaleDetail(saleId) {
+  const sale = salesData.find(s => s.sale_id === saleId);
+  if (!sale) return;
+
+  document.getElementById('sale-detail-title').textContent = `SALE: ${sale.sale_id}`;
+  document.getElementById('sale-detail-id').textContent = sale.sale_id;
+  document.getElementById('sale-detail-session').textContent = sale.session_id || '—';
+  document.getElementById('sale-detail-subtotal').textContent = formatCurrency(sale.subtotal);
+  document.getElementById('sale-detail-tax').textContent = formatCurrency(sale.tax_amount);
+  document.getElementById('sale-detail-total').textContent = formatCurrency(sale.total);
+  document.getElementById('sale-detail-completed').textContent = sale.completed_at || '—';
+
+  const itemsTbody = document.getElementById('sale-detail-items-tbody');
+  if (itemsTbody) {
+    if (!sale.lineItems || sale.lineItems.length === 0) {
+      itemsTbody.innerHTML = '<tr><td colspan="5" class="text-center">No line items</td></tr>';
+    } else {
+      itemsTbody.innerHTML = sale.lineItems.map(li => `
+        <tr>
+          <td><strong>${li.name}</strong> <span style="font-size:0.65rem;color:#666;">(${li.product_id})</span></td>
+          <td>${li.category || '—'}</td>
+          <td class="text-right">${li.quantity}</td>
+          <td class="text-right">${formatCurrency(li.unit_price)}</td>
+          <td class="text-right">${formatCurrency(li.line_subtotal)}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  document.getElementById('sale-detail-panel')?.classList.remove('hidden');
+}
+
+// ==========================================
+// 12. Enhanced Analytics (Real DB Charts)
+// ==========================================
+async function loadAnalyticsData() {
+  const token = getAuthToken();
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/analytics?granularity=${analyticsFilter.granularity}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (!data.success) return;
+
+    // Update revenue trend chart with real time series data
+    if (revenueTrendChart && data.timeSeries?.length > 0) {
+      const labels = data.timeSeries.map(d => {
+        const date = new Date(d.bucket);
+        if (analyticsFilter.granularity === 'daily') return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (analyticsFilter.granularity === 'weekly') return 'W' + Math.ceil(date.getDate() / 7) + ' ' + date.toLocaleDateString('en-US', { month: 'short' });
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      });
+      revenueTrendChart.data.labels = labels;
+      revenueTrendChart.data.datasets[0].data = data.timeSeries.map(d => d.revenue);
+      revenueTrendChart.data.datasets[1].data = data.timeSeries.map(d => d.orders);
+      revenueTrendChart.update();
+
+      // Update chart footer with peak revenue
+      const peak = data.timeSeries.reduce((max, d) => d.revenue > max.revenue ? d : max, data.timeSeries[0]);
+      const peakLabel = labels[data.timeSeries.indexOf(peak)] || '';
+      const peakMeta = document.querySelector('#view-analytics .chart-col-wide .chart-card-footer .chart-meta');
+      if (peakMeta) peakMeta.textContent = `PEAK REVENUE: ${formatCurrency(peak.revenue)} @ ${peakLabel}`;
+    }
+
+    // Update category chart
+    if (categorySalesChart && data.categorySales?.length > 0) {
+      categorySalesChart.data.labels = data.categorySales.map(c => c.category);
+      categorySalesChart.data.datasets[0].data = data.categorySales.map(c => c.revenue);
+      categorySalesChart.data.datasets[1].data = data.categorySales.map(c => c.units);
+      categorySalesChart.update();
+
+      // Update category chart footer
+      const topCat = data.categorySales[0];
+      const totalCatRev = data.categorySales.reduce((s, c) => s + c.revenue, 0);
+      const catPct = totalCatRev > 0 ? ((topCat.revenue / totalCatRev) * 100).toFixed(1) : '0.0';
+      const catFooter = document.querySelector('#view-analytics .hud-chart-card:nth-child(2) .chart-card-footer .chart-meta');
+      if (catFooter) catFooter.textContent = `LEADER: ${topCat.category.toUpperCase()} (${catPct}% OF TOTAL REVENUE)`;
+    }
+
+    // Update top products chart
+    if (topProductsChart && data.topProducts?.length > 0) {
+      topProductsChart.data.labels = data.topProducts.map(p => p.name);
+      topProductsChart.data.datasets[0].data = data.topProducts.map(p => p.revenue);
+      topProductsChart.update();
+
+      // Update best seller in ribbon and chart footer
+      const bestSeller = data.topProducts[0];
+      const bestSellerEl = document.getElementById('metric-best-seller');
+      if (bestSellerEl) bestSellerEl.textContent = `${bestSeller.name} (${bestSeller.units} sold)`;
+
+      const topFooter = document.querySelector('#view-analytics .hud-chart-card:nth-child(3) .chart-card-footer .chart-meta');
+      if (topFooter) topFooter.textContent = `TOP PRODUCT: ${bestSeller.name.toUpperCase()} (${formatCurrency(bestSeller.revenue)})`;
+    }
+
+    // Update traffic velocity chart from hourly sales data from dashboard
+    if (trafficVelocityChart && dbAnalytics?.hourlySales?.length > 0) {
+      trafficVelocityChart.data.labels = dbAnalytics.hourlySales.map(h => h.hour);
+      trafficVelocityChart.data.datasets[0].data = dbAnalytics.hourlySales.map(h => h.orders);
+      trafficVelocityChart.update();
+    }
+
+    // Update KPI sub-texts with live data
+    const outOfStockCount = dbKPIs?.outOfStockCount ?? 0;
+    const lowStockCount = dbKPIs?.lowStockCount ?? 0;
+    const belowSafety = Math.max(0, lowStockCount - outOfStockCount);
+    const lowStockSub = document.querySelector('#kpi-card-low-stock .kpi-subtext');
+    if (lowStockSub) {
+      lowStockSub.innerHTML = `
+        <span class="text-danger">${outOfStockCount} OUT OF STOCK</span>
+        <span>// ${belowSafety} BELOW SAFETY</span>
+      `;
+    }
+
+  } catch (err) {
+    console.error('Failed to load analytics data:', err);
+  }
+}
+
+// ==========================================
+// 13. Application Bootstrap
 // ==========================================
 async function initApp() {
   const isAuthed = await enforceAuth();
@@ -1271,6 +1663,8 @@ async function initApp() {
 
   setupEventListeners();
   await loadDashboardData(true);
+  // Load enhanced analytics for charts after initial data
+  loadAnalyticsData();
 }
 
 window.addEventListener('DOMContentLoaded', initApp);

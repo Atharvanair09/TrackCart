@@ -541,4 +541,238 @@ router.put('/thresholds/:productId', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/sessions
+ * Returns shopping sessions (active, completed, cancelled) with their cart items
+ */
+router.get('/sessions', async (req, res) => {
+  const { status = 'ALL', limit = 50 } = req.query;
+  try {
+    const whereClause = status !== 'ALL' ? `WHERE ss.status = $1` : '';
+    const params = status !== 'ALL' ? [status] : [];
+
+    const sessRes = await pool.query(`
+      SELECT
+        ss.session_id,
+        ss.cart_id,
+        ss.user_id,
+        ss.status,
+        TO_CHAR(ss.started_at, 'YYYY-MM-DD HH24:MI:SS') AS started_at,
+        TO_CHAR(ss.ended_at, 'YYYY-MM-DD HH24:MI:SS') AS ended_at,
+        COALESCE(item_agg.item_count, 0) AS item_count,
+        COALESCE(item_agg.subtotal, 0) AS subtotal,
+        s.sale_id
+      FROM shopping_sessions ss
+      LEFT JOIN (
+        SELECT session_id, COUNT(*) AS item_count, SUM(subtotal) AS subtotal
+        FROM cart_items
+        GROUP BY session_id
+      ) item_agg ON ss.session_id = item_agg.session_id
+      LEFT JOIN sales s ON ss.session_id = s.session_id
+      ${whereClause}
+      ORDER BY ss.started_at DESC
+      LIMIT ${parseInt(limit, 10) || 50}
+    `, params);
+
+    // Fetch cart items for each session
+    const sessions = sessRes.rows;
+    for (const sess of sessions) {
+      const itemsRes = await pool.query(`
+        SELECT ci.product_id, ci.quantity, ci.unit_price_at_addition, ci.subtotal, p.name, p.category
+        FROM cart_items ci
+        JOIN products p ON ci.product_id = p.product_id
+        WHERE ci.session_id = $1
+      `, [sess.session_id]);
+      sess.items = itemsRes.rows;
+    }
+
+    return res.json({ success: true, sessions });
+  } catch (err) {
+    console.error('Error fetching sessions:', err);
+    return res.status(500).json({ error: 'Failed to retrieve sessions' });
+  }
+});
+
+/**
+ * GET /api/admin/sales
+ * Returns completed sales records with line items
+ */
+router.get('/sales', async (req, res) => {
+  const { limit = 100, startDate, endDate } = req.query;
+  try {
+    let whereClause = '';
+    const params = [];
+    if (startDate && endDate) {
+      whereClause = `WHERE s.completed_at >= $1 AND s.completed_at < $2::date + interval '1 day'`;
+      params.push(startDate, endDate);
+    }
+
+    const salesRes = await pool.query(`
+      SELECT
+        s.sale_id,
+        s.session_id,
+        s.subtotal,
+        s.tax_rate,
+        s.tax_amount,
+        s.total,
+        TO_CHAR(s.completed_at, 'YYYY-MM-DD HH24:MI:SS') AS completed_at,
+        COALESCE(li_agg.item_count, 0) AS item_count
+      FROM sales s
+      LEFT JOIN (
+        SELECT sale_id, SUM(quantity) AS item_count
+        FROM sale_line_items
+        GROUP BY sale_id
+      ) li_agg ON s.sale_id = li_agg.sale_id
+      ${whereClause}
+      ORDER BY s.completed_at DESC
+      LIMIT ${parseInt(limit, 10) || 100}
+    `, params);
+
+    const sales = salesRes.rows;
+    for (const sale of sales) {
+      const liRes = await pool.query(`
+        SELECT sli.product_id, sli.quantity, sli.unit_price, sli.line_subtotal, p.name, p.category
+        FROM sale_line_items sli
+        JOIN products p ON sli.product_id = p.product_id
+        WHERE sli.sale_id = $1
+      `, [sale.sale_id]);
+      sale.lineItems = liRes.rows;
+    }
+
+    // Aggregate totals
+    const totalsRes = await pool.query(`
+      SELECT
+        COUNT(*) AS total_sales,
+        COALESCE(SUM(total), 0) AS total_revenue,
+        COALESCE(SUM(tax_amount), 0) AS total_tax
+      FROM sales
+      ${whereClause}
+    `, params);
+
+    return res.json({
+      success: true,
+      sales,
+      totals: {
+        count: parseInt(totalsRes.rows[0].total_sales, 10),
+        revenue: parseFloat(totalsRes.rows[0].total_revenue),
+        tax: parseFloat(totalsRes.rows[0].total_tax)
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching sales:', err);
+    return res.status(500).json({ error: 'Failed to retrieve sales data' });
+  }
+});
+
+/**
+ * GET /api/admin/analytics
+ * Returns time-series revenue and order data for chart rendering
+ * Query params: granularity=daily|weekly|monthly, startDate, endDate
+ */
+router.get('/analytics', async (req, res) => {
+  const { granularity = 'daily', startDate, endDate } = req.query;
+
+  let dateTrunc = 'day';
+  if (granularity === 'weekly') dateTrunc = 'week';
+  if (granularity === 'monthly') dateTrunc = 'month';
+
+  let dateFilter = '';
+  const params = [];
+  if (startDate && endDate) {
+    dateFilter = `WHERE completed_at >= $1 AND completed_at < $2::date + interval '1 day'`;
+    params.push(startDate, endDate);
+  }
+
+  try {
+    // Revenue + order count over time
+    const timeSeriesRes = await pool.query(`
+      SELECT
+        DATE_TRUNC('${dateTrunc}', completed_at) AS bucket,
+        COUNT(*) AS order_count,
+        COALESCE(SUM(total), 0) AS revenue,
+        COALESCE(SUM(subtotal), 0) AS subtotal
+      FROM sales
+      ${dateFilter}
+      GROUP BY DATE_TRUNC('${dateTrunc}', completed_at)
+      ORDER BY bucket ASC
+    `, params);
+
+    // Units sold per time bucket
+    const unitSeriesRes = await pool.query(`
+      SELECT
+        DATE_TRUNC('${dateTrunc}', s.completed_at) AS bucket,
+        COALESCE(SUM(sli.quantity), 0) AS units_sold
+      FROM sale_line_items sli
+      JOIN sales s ON sli.sale_id = s.sale_id
+      ${dateFilter}
+      GROUP BY DATE_TRUNC('${dateTrunc}', s.completed_at)
+      ORDER BY bucket ASC
+    `, params);
+
+    // Category breakdown
+    const catRes = await pool.query(`
+      SELECT
+        COALESCE(p.category, 'Uncategorized') AS category,
+        COALESCE(SUM(sli.line_subtotal), 0) AS revenue,
+        COALESCE(SUM(sli.quantity), 0) AS units
+      FROM sale_line_items sli
+      JOIN products p ON sli.product_id = p.product_id
+      JOIN sales s ON sli.sale_id = s.sale_id
+      ${dateFilter}
+      GROUP BY p.category
+      ORDER BY revenue DESC
+    `, params);
+
+    // Top products
+    const topProdRes = await pool.query(`
+      SELECT
+        p.product_id,
+        p.name,
+        COALESCE(SUM(sli.line_subtotal), 0) AS revenue,
+        COALESCE(SUM(sli.quantity), 0) AS units
+      FROM sale_line_items sli
+      JOIN products p ON sli.product_id = p.product_id
+      JOIN sales s ON sli.sale_id = s.sale_id
+      ${dateFilter}
+      GROUP BY p.product_id, p.name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `, params);
+
+    // Active sessions count
+    const activeSessionRes = await pool.query(
+      `SELECT COUNT(*) AS active_sessions FROM shopping_sessions WHERE status = 'active'`
+    );
+
+    return res.json({
+      success: true,
+      timeSeries: timeSeriesRes.rows.map(r => ({
+        bucket: r.bucket,
+        orders: parseInt(r.order_count, 10),
+        revenue: parseFloat(r.revenue),
+        subtotal: parseFloat(r.subtotal)
+      })),
+      unitSeries: unitSeriesRes.rows.map(r => ({
+        bucket: r.bucket,
+        units: parseInt(r.units_sold, 10)
+      })),
+      categorySales: catRes.rows.map(r => ({
+        category: r.category,
+        revenue: parseFloat(r.revenue),
+        units: parseInt(r.units, 10)
+      })),
+      topProducts: topProdRes.rows.map(r => ({
+        id: r.product_id,
+        name: r.name,
+        revenue: parseFloat(r.revenue),
+        units: parseInt(r.units, 10)
+      })),
+      activeSessions: parseInt(activeSessionRes.rows[0].active_sessions, 10)
+    });
+  } catch (err) {
+    console.error('Error fetching analytics:', err);
+    return res.status(500).json({ error: 'Failed to retrieve analytics data' });
+  }
+});
+
 module.exports = router;
