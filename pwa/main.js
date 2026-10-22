@@ -111,10 +111,22 @@ function formatPrice(amount) {
 
 // Create Session API Call (POST /api/sessions)
 async function createSession(cartId) {
-  const cleanCartId = cartId ? cartId.trim().toUpperCase() : '';
+  // Front‑end normalisation – mirrors backend utils/cartId.js
+  function normalizeCartIdFrontend(rawId) {
+    if (!rawId || typeof rawId !== 'string') return null;
+    const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, ''); // strip non‑alphanum
+    const match = cleaned.match(/^CART0?(\\d)$/);
+    if (!match) return null;
+    const num = parseInt(match[1], 10);
+    if (num >= 1 && num <= 3) {
+      return `CART_0${num}`; // canonical DB id
+    }
+    return null;
+  }
 
-  if (!cleanCartId) {
-    showError(scannerError, 'PLEASE ENTER A VALID CART ID (e.g. CART-001)');
+  const normalizedId = normalizeCartIdFrontend(cartId);
+  if (!normalizedId) {
+    showError(scannerError, 'INVALID CART ID – must be CART‑01 / CART‑02 / CART‑03');
     return;
   }
 
@@ -128,7 +140,7 @@ async function createSession(cartId) {
     const res = await fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cartId: cleanCartId })
+      body: JSON.stringify({ cartId: normalizedId })
     });
 
     const data = await res.json();
@@ -211,11 +223,20 @@ async function fetchCart(isInitial = false) {
 }
 
 // Render Cart Ledger View
+function friendlyCartName(cartId) {
+  // Convert CART_01, CART-01, CART01 etc. to "Cart 1"
+  const num = cartId && cartId.match(/\d+/) ? parseInt(cartId.match(/\d+/)[0], 10) : null;
+  return num ? `Cart ${num}` : cartId || 'Cart';
+}
+
 function renderCart(sessionData) {
   if (ledgerCartId) {
-    ledgerCartId.textContent = sessionData.cart_id || 'CRT-UNKNOWN';
+    // Show friendly cart label (e.g., "Cart 1")
+    const friendly = friendlyCartName(sessionData.cart_id);
+    ledgerCartId.textContent = friendly;
   }
 
+  // Use friendly name in other UI places if needed
   const items = sessionData.items || [];
 
   if (items.length === 0) {

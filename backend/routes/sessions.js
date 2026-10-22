@@ -2,13 +2,16 @@ const express = require('express');
 // Enable inventory-only demo mode via env var. Set INVENTORY_ONLY_MODE=true to bypass Razorpay verification and payment order creation.
 const router = express.Router();
 const { pool } = require('../db');
+const { normalizeCartId } = require('../utils/cartId');
 const INVENTORY_ONLY_MODE = process.env.INVENTORY_ONLY_MODE === 'true';
 
 // POST /api/sessions - Create a new session
 router.post('/', async (req, res) => {
-  const { userId, cartId } = req.body;
+  let { userId, cartId } = req.body;
+  // Normalize cart identifier to canonical DB form
+  cartId = normalizeCartId(cartId);
   if (!cartId) {
-    return res.status(400).json({ error: 'Missing cartId' });
+    return res.status(400).json({ error: 'Invalid cartId' });
   }
   
   const client = await pool.connect();
