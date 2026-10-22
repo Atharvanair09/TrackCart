@@ -261,7 +261,7 @@ const reservationAggRes = await client.query(
       );
       // Record inventory movement for sale (deduct both physical and reserved)
       await client.query(
-        `INSERT INTO inventory_movements (operation_id, product_id, movement_type, quantity, physical_delta, reserved_delta) VALUES ($1, $2, 'sale', $3, -$3, -$3)`,
+        `INSERT INTO inventory_movements (operation_id, product_id, movement_type, quantity, physical_delta, reserved_delta) VALUES ($1, $2, 'sale', $3, -CAST($3 AS INTEGER), -CAST($3 AS INTEGER))`,
         [saleOperationId, item.product_id, item.quantity]
       );
     });
