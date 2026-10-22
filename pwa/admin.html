@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TrackCart Admin // Store Operations & Inventory Control</title>
+    <meta name="description" content="TrackCart Admin Console: Real-time sales analytics, inventory telemetry, stock movements, and store management." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/admin.css" />
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body class="admin-body">
+    <div id="admin-app">
+      <!-- 1. Top HUD Global Bar -->
+      <header class="global-hud-bar">
+        <div class="hud-bar-left">
+          <span class="hud-tag">SYS_ADMIN</span>
+          <span class="hud-sep">//</span>
+          <span class="hud-node">CONSOLE_ROOT_01</span>
+          <span class="hud-sep">//</span>
+          <span class="hud-tag text-accent-green">LIVE_SYNC ■</span>
+        </div>
+        <div class="hud-bar-center">
+          <span>STORE_NODE: TC-FLAGSHIP-01</span>
+          <span class="hud-sep">//</span>
+          <span id="hud-live-clock">18:05:00 UTC</span>
+        </div>
+        <div class="hud-bar-right">
+          <span id="hud-admin-identity">ADMIN: ojharamakant48@gmail.com</span>
+          <span class="hud-sep">//</span>
+          <span>ADMIN_OS v2.6.0</span>
+        </div>
+      </header>
+
+      <!-- 2. Desktop & Tablet Top Navigation Bar -->
+      <nav id="admin-top-nav" class="hud-top-nav font-mono">
+        <div class="admin-nav-brand-group">
+          <span class="desktop-nav-brand">TRACKCART // ADMIN</span>
+          <span class="admin-badge-indicator">MGMT_PORTAL</span>
+        </div>
+        
+        <div class="admin-tab-group">
+          <button class="nav-tab active" data-tab="analytics">
+            <span class="tab-icon">📊</span> SALES ANALYTICS
+          </button>
+          <button class="nav-tab" data-tab="inventory">
+            <span class="tab-icon">📦</span> INVENTORY CONTROL
+          </button>
+          <button class="nav-tab" data-tab="movements">
+            <span class="tab-icon">📜</span> STOCK MOVEMENTS
+          </button>
+        </div>
+
+        <div class="admin-nav-right-actions">
+          <button id="btn-export-csv" class="admin-action-btn-pill font-mono" title="Export CSV Report">
+            <span>💾</span> EXPORT CSV
+          </button>
+          <button id="btn-refresh-data" class="admin-action-btn-pill font-mono" title="Sync Live Data">
+            <span>🔄</span> SYNC
+          </button>
+          <button id="btn-admin-logout" class="admin-action-btn-pill font-mono" title="Sign out of Admin Session">
+            <span>🔒</span> LOGOUT
+          </button>
+          <a href="/index.html" class="admin-exit-cart-link font-mono" title="Switch to Customer Cart Interface">
+            <span class="tab-icon">🛒</span> CART IFACE
+          </a>
+        </div>
+      </nav>
+
+      <!-- 3. Top Action Sub-Header Strip -->
+      <section class="admin-sub-strip">
+        <div class="sub-strip-left font-mono">
+          <span class="sub-strip-label">STORE CONSOLE:</span>
+          <strong class="sub-strip-title">FLAGSHIP SUPERSTORE #104</strong>
+          <span class="hud-badge status-online">■ ACTIVE REGISTRY</span>
+          <span class="sub-strip-meta">RFID GATEWAY: CONNECTED (4 CARTS ACTIVE)</span>
+        </div>
+
+        <div class="sub-strip-right">
+          <button id="btn-action-add-prod" class="hud-btn-action font-mono">
+            <span class="btn-icon-plus">+</span> ADD PRODUCT
+          </button>
+          <button id="btn-action-cycle-count" class="hud-btn-action font-mono">
+            <span>⚖</span> PHYSICAL COUNT
+          </button>
+          <button id="btn-action-restock" class="hud-btn-action font-mono">
+            <span>📥</span> RESTOCK / DAMAGE
+          </button>
+          <button id="btn-action-thresholds" class="hud-btn-action font-mono">
+            <span>⚙</span> REORDER RULES
+          </button>
+        </div>
+      </section>
+
+      <!-- Main Admin Viewport Container -->
+      <main class="admin-main-container">
+        
+        <!-- SECTION 1: TOP KPI CARDS (Always visible) -->
+        <section class="admin-kpi-grid">
+          <!-- KPI 1: Today's Sales -->
+          <div class="admin-kpi-card">
+            <div class="kpi-card-header font-mono">
+              <span class="kpi-code">SYS.REV_01</span>
+              <span class="kpi-badge positive">+14.2% ▲</span>
+            </div>
+            <div class="kpi-card-body">
+              <div class="kpi-label font-mono">TODAY'S GROSS SALES</div>
+              <div class="kpi-value font-mono" id="kpi-today-sales">$4,892.50</div>
+              <div class="kpi-subtext font-mono">
+                <span>VS YESTERDAY: $4,284.00</span>
+                <span class="kpi-tag-mini">TARGET: $5,000 (97.8%)</span>
+              </div>
+            </div>
+            <div class="kpi-card-footer font-mono">
+              <div class="kpi-progress-bar">
+                <div class="kpi-progress-fill" style="width: 97.8%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI 2: Completed Orders -->
+          <div class="admin-kpi-card">
+            <div class="kpi-card-header font-mono">
+              <span class="kpi-code">SYS.ORD_02</span>
+              <span class="kpi-badge positive">+5.6% ▲</span>
+            </div>
+            <div class="kpi-card-body">
+              <div class="kpi-label font-mono">COMPLETED ORDERS</div>
+              <div class="kpi-value font-mono" id="kpi-completed-orders">168</div>
+              <div class="kpi-subtext font-mono">
+                <span>AVG CHECKOUT: 3m 42s</span>
+                <span class="kpi-tag-mini">0 VOIDS // 100% SUCCESS</span>
+              </div>
+            </div>
+            <div class="kpi-card-footer font-mono">
+              <span class="kpi-footer-metric">CART CAPACITY: 12 AVAILABLE</span>
+            </div>
+          </div>
+
+          <!-- KPI 3: Low Stock Products -->
+          <div class="admin-kpi-card kpi-card-warning" id="kpi-card-low-stock" title="Click to view low stock items">
+            <div class="kpi-card-header font-mono">
+              <span class="kpi-code">SYS.STK_03</span>
+              <span class="kpi-badge warning">ALERT ⚠</span>
+            </div>
+            <div class="kpi-card-body">
+              <div class="kpi-label font-mono">LOW STOCK PRODUCTS</div>
+              <div class="kpi-value font-mono" id="kpi-low-stock-count">3</div>
+              <div class="kpi-subtext font-mono">
+                <span class="text-danger">1 OUT OF STOCK</span>
+                <span>// 2 BELOW SAFETY</span>
+              </div>
+            </div>
+            <div class="kpi-card-footer font-mono clickable-hint">
+              <span>FILTER INVENTORY LIST →</span>
+            </div>
+          </div>
+
+          <!-- KPI 4: Gross Profit -->
+          <div class="admin-kpi-card">
+            <div class="kpi-card-header font-mono">
+              <span class="kpi-code">SYS.PRF_04</span>
+              <span class="kpi-badge positive">MARGIN: 35.2%</span>
+            </div>
+            <div class="kpi-card-body">
+              <div class="kpi-label font-mono">ESTIMATED GROSS PROFIT</div>
+              <div class="kpi-value font-mono" id="kpi-gross-profit">$1,724.80</div>
+              <div class="kpi-subtext font-mono">
+                <span>COGS: $3,167.70</span>
+                <span class="kpi-tag-mini">NET EST: $1,389.20</span>
+              </div>
+            </div>
+            <div class="kpi-card-footer font-mono">
+              <span class="kpi-footer-metric">MARGIN GAIN: +1.8% THIS WEEK</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- TAB VIEW 1: SALES ANALYTICS                          -->
+        <!-- ==================================================== -->
+        <section id="view-analytics" class="admin-tab-view active">
+          <!-- Interactive Filter Bar -->
+          <div class="admin-filter-panel font-mono">
+            <div class="filter-panel-header">
+              <div class="filter-header-left">
+                <span class="filter-icon">⚙</span>
+                <span class="filter-title">ANALYTICS QUERY FILTERS</span>
+                <span class="hud-pill">[REALTIME_AGG]</span>
+              </div>
+              <button id="btn-reset-filters" class="admin-btn-link font-mono">[ RESET ALL FILTERS ]</button>
+            </div>
+
+            <div class="filter-panel-controls">
+              <!-- Date Range Selector -->
+              <div class="filter-control-group">
+                <label for="filter-date-preset" class="control-label">DATE RANGE:</label>
+                <div class="filter-date-pills">
+                  <button class="date-pill active" data-preset="today">TODAY</button>
+                  <button class="date-pill" data-preset="yesterday">YESTERDAY</button>
+                  <button class="date-pill" data-preset="7d">LAST 7D</button>
+                  <button class="date-pill" data-preset="30d">LAST 30D</button>
+                  <button class="date-pill" data-preset="month">THIS MONTH</button>
+                </div>
+              </div>
+
+              <!-- Custom Date Range -->
+              <div class="filter-control-group">
+                <label class="control-label">CUSTOM RANGE:</label>
+                <div class="custom-date-inputs">
+                  <input type="date" id="filter-date-start" class="admin-input-date" value="2026-10-21" />
+                  <span class="date-sep">TO</span>
+                  <input type="date" id="filter-date-end" class="admin-input-date" value="2026-10-21" />
+                  <button id="btn-apply-custom-date" class="admin-btn-dark-sm">APPLY</button>
+                </div>
+              </div>
+
+              <!-- Product Category Filter -->
+              <div class="filter-control-group">
+                <label for="filter-category" class="control-label">CATEGORY:</label>
+                <select id="filter-category" class="admin-select">
+                  <option value="ALL">ALL CATEGORIES</option>
+                  <option value="Electronics">ELECTRONICS</option>
+                  <option value="Accessories">ACCESSORIES</option>
+                  <option value="Snacks">SNACKS</option>
+                  <option value="Beverages">BEVERAGES</option>
+                </select>
+              </div>
+
+              <!-- Specific Product Filter -->
+              <div class="filter-control-group">
+                <label for="filter-product" class="control-label">PRODUCT SKU:</label>
+                <select id="filter-product" class="admin-select">
+                  <option value="ALL">ALL PRODUCTS (10 SKUs)</option>
+                  <!-- Populated dynamically via JS -->
+                </select>
+              </div>
+
+              <!-- Granularity Selector -->
+              <div class="filter-control-group">
+                <label class="control-label">TIMELINE BUCKET:</label>
+                <div class="granularity-toggle">
+                  <button class="toggle-btn active" data-granularity="daily">DAILY</button>
+                  <button class="toggle-btn" data-granularity="weekly">WEEKLY</button>
+                  <button class="toggle-btn" data-granularity="monthly">MONTHLY</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analytics Secondary Metrics Ribbon -->
+          <div class="analytics-metrics-ribbon font-mono">
+            <div class="ribbon-metric">
+              <span class="ribbon-label">TOTAL REVENUE</span>
+              <strong class="ribbon-val" id="metric-filtered-revenue">$4,892.50</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric">
+              <span class="ribbon-label">COMPLETED TRANSACTIONS</span>
+              <strong class="ribbon-val" id="metric-filtered-orders">168</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric">
+              <span class="ribbon-label">UNITS SOLD</span>
+              <strong class="ribbon-val" id="metric-filtered-units">412 UNITS</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric">
+              <span class="ribbon-label">AVG BILL VALUE (AOV)</span>
+              <strong class="ribbon-val" id="metric-filtered-aov">$29.12 / ORDER</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric">
+              <span class="ribbon-label">EST. GROSS PROFIT</span>
+              <strong class="ribbon-val text-accent-green" id="metric-filtered-profit">$1,724.80</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric">
+              <span class="ribbon-label">GROSS MARGIN</span>
+              <strong class="ribbon-val" id="metric-filtered-margin">35.25%</strong>
+            </div>
+            <div class="ribbon-divider"></div>
+            <div class="ribbon-metric best-seller-badge">
+              <span class="ribbon-label">BEST-SELLING SKU</span>
+              <strong class="ribbon-val highlight" id="metric-best-seller">Wireless Earbuds (48 sold)</strong>
+            </div>
+          </div>
+
+          <!-- Recommended Analytics Charts Grid -->
+          <div class="analytics-charts-grid">
+            <!-- Chart 1: Revenue Over Time Trend Line -->
+            <div class="hud-chart-card chart-col-wide">
+              <div class="chart-card-header font-mono">
+                <div class="chart-header-left">
+                  <span class="chart-badge">LINE_CHART // 01</span>
+                  <h3>SALES REVENUE & TRANSACTION VOLUME OVER TIME</h3>
+                </div>
+                <div class="chart-controls">
+                  <span id="chart-timeline-mode" class="chart-mode-pill">DAILY BREAKDOWN</span>
+                  <div class="chart-view-toggles">
+                    <button id="toggle-chart-revenue" class="chart-toggle-btn active">REVENUE ($)</button>
+                    <button id="toggle-chart-orders" class="chart-toggle-btn">ORDERS (#)</button>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-card-body">
+                <canvas id="revenueTrendChart" height="120"></canvas>
+              </div>
+              <div class="chart-card-footer font-mono">
+                <span class="chart-meta">DATA INTERVAL: REALTIME AGGREGATION</span>
+                <span class="chart-meta">PEAK REVENUE: $1,280.00 @ 14:00</span>
+              </div>
+            </div>
+
+            <!-- Chart 2: Category-Wise Sales Bar Chart -->
+            <div class="hud-chart-card">
+              <div class="chart-card-header font-mono">
+                <div class="chart-header-left">
+                  <span class="chart-badge">BAR_CHART // 02</span>
+                  <h3>CATEGORY-WISE SALES & REVENUE</h3>
+                </div>
+                <div class="chart-controls">
+                  <span class="chart-mode-pill">UNITS & VOLUME</span>
+                </div>
+              </div>
+              <div class="chart-card-body">
+                <canvas id="categorySalesChart" height="160"></canvas>
+              </div>
+              <div class="chart-card-footer font-mono">
+                <span class="chart-meta">LEADER: ELECTRONICS (42.4% OF TOTAL REVENUE)</span>
+              </div>
+            </div>
+
+            <!-- Chart 3: Top-Five Products Bar Chart -->
+            <div class="hud-chart-card">
+              <div class="chart-card-header font-mono">
+                <div class="chart-header-left">
+                  <span class="chart-badge">BAR_CHART // 03</span>
+                  <h3>TOP-FIVE BEST-SELLING PRODUCTS</h3>
+                </div>
+                <div class="chart-controls">
+                  <span class="chart-mode-pill">BY GROSS VALUE</span>
+                </div>
+              </div>
+              <div class="chart-card-body">
+                <canvas id="topProductsChart" height="160"></canvas>
+              </div>
+              <div class="chart-card-footer font-mono">
+                <span class="chart-meta">TOP PRODUCT: WIRELESS EARBUDS ($1,919.52)</span>
+              </div>
+            </div>
+
+            <!-- Chart 4: Sales by Hour & Day of Week Distribution -->
+            <div class="hud-chart-card chart-col-wide">
+              <div class="chart-card-header font-mono">
+                <div class="chart-header-left">
+                  <span class="chart-badge">DISTRIB // 04</span>
+                  <h3>STORE TRAFFIC & SALES VELOCITY (HOURLY / DAY-OF-WEEK)</h3>
+                </div>
+                <div class="chart-controls">
+                  <div class="chart-view-toggles">
+                    <button id="btn-distrib-hourly" class="chart-toggle-btn active">HOURLY (08:00 - 22:00)</button>
+                    <button id="btn-distrib-dow" class="chart-toggle-btn">DAY OF WEEK (MON - SUN)</button>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-card-body">
+                <canvas id="trafficVelocityChart" height="110"></canvas>
+              </div>
+              <div class="chart-card-footer font-mono">
+                <span class="chart-meta">PEAK RUSH HOURS: 12:00-14:00 (LUNCH) & 18:00-20:00 (EVENING)</span>
+                <span class="chart-meta">HIGHEST BASKET VALUE: SATURDAY ($34.80)</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- TAB VIEW 2: INVENTORY MANAGEMENT                     -->
+        <!-- ==================================================== -->
+        <section id="view-inventory" class="admin-tab-view">
+          <!-- Inventory Table Toolbar & Action Bar -->
+          <div class="inventory-controls-panel font-mono">
+            <div class="inventory-controls-top">
+              <div class="inventory-title-group">
+                <span class="hud-pill">[INVENTORY_CONTROL]</span>
+                <h2>STOCK LEDGER & RFID ASSET REGISTRY</h2>
+                <span class="stock-total-badge" id="inv-total-skus-badge">10 PRODUCTS REGISTERED</span>
+              </div>
+
+              <!-- Quick Inventory Summary Stats Chips -->
+              <div class="inventory-summary-chips">
+                <div class="inv-chip">
+                  <span class="chip-label">ON-HAND:</span>
+                  <strong class="chip-val" id="sum-on-hand">230</strong>
+                </div>
+                <div class="inv-chip">
+                  <span class="chip-label">RESERVED IN CARTS:</span>
+                  <strong class="chip-val" id="sum-reserved">18</strong>
+                </div>
+                <div class="inv-chip chip-highlight">
+                  <span class="chip-label">NET AVAILABLE:</span>
+                  <strong class="chip-val" id="sum-available">212</strong>
+                </div>
+                <div class="inv-chip">
+                  <span class="chip-label">VALUATION:</span>
+                  <strong class="chip-val" id="sum-asset-val">$5,248.60</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="inventory-filter-bar">
+              <!-- Search box -->
+              <div class="search-box-wrapper">
+                <span class="search-icon">🔍</span>
+                <input
+                  type="text"
+                  id="inv-search-input"
+                  placeholder="SEARCH PRODUCT NAME, ID, OR RFID TAG (e.g. Earbuds, PROD001, RF-9948)..."
+                  class="inv-search-input"
+                />
+                <button id="btn-clear-search" class="clear-search-btn hidden">✕</button>
+              </div>
+
+              <!-- Category Filter dropdown -->
+              <div class="inv-filter-select-group">
+                <label for="inv-category-filter">CATEGORY:</label>
+                <select id="inv-category-filter" class="inv-filter-select">
+                  <option value="ALL">ALL CATEGORIES</option>
+                  <option value="Electronics">ELECTRONICS</option>
+                  <option value="Accessories">ACCESSORIES</option>
+                  <option value="Snacks">SNACKS</option>
+                  <option value="Beverages">BEVERAGES</option>
+                </select>
+              </div>
+
+              <!-- Status Filter Dropdown (Healthy, Low Stock, Out of Stock) -->
+              <div class="inv-filter-select-group">
+                <label for="inv-status-filter">STOCK STATUS:</label>
+                <select id="inv-status-filter" class="inv-filter-select">
+                  <option value="ALL">ALL STATUSES</option>
+                  <option value="Healthy">HEALTHY</option>
+                  <option value="Low stock">LOW STOCK</option>
+                  <option value="Out of stock">OUT OF STOCK</option>
+                </select>
+              </div>
+
+              <!-- Sorting Dropdown -->
+              <div class="inv-filter-select-group">
+                <label for="inv-sort-select">SORT BY:</label>
+                <select id="inv-sort-select" class="inv-filter-select">
+                  <option value="available-asc">AVAILABLE STOCK (LOW TO HIGH)</option>
+                  <option value="available-desc">AVAILABLE STOCK (HIGH TO LOW)</option>
+                  <option value="name-asc">PRODUCT NAME (A-Z)</option>
+                  <option value="onhand-desc">PHYSICAL ON-HAND (HIGH TO LOW)</option>
+                  <option value="price-desc">SELLING PRICE (HIGH TO LOW)</option>
+                  <option value="margin-desc">PROFIT MARGIN (HIGH TO LOW)</option>
+                </select>
+              </div>
+
+              <!-- View Switcher (Table vs Card) -->
+              <div class="view-switcher-group">
+                <button id="btn-view-table" class="view-switch-btn active" title="Dense Table View">☰ TABLE</button>
+                <button id="btn-view-cards" class="view-switch-btn" title="Grid Cards View">☵ CARDS</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Inventory Table Container -->
+          <div class="inventory-table-container">
+            <table class="hud-inventory-table font-mono" id="inventory-table">
+              <thead>
+                <tr>
+                  <th class="th-sortable" data-sort="name">
+                    PRODUCT & RFID TAG <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="th-sortable text-center" data-sort="category">
+                    CATEGORY <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="th-sortable text-right" data-sort="onhand">
+                    ON HAND <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="th-sortable text-right" data-sort="reserved">
+                    RESERVED <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="th-sortable text-right" data-sort="available">
+                    AVAILABLE <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="th-sortable text-right" data-sort="price">
+                    COST / PRICE <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="text-center">
+                    REORDER / SAFETY
+                  </th>
+                  <th class="text-center">
+                    LEAD TIME
+                  </th>
+                  <th class="text-center">
+                    LAST RESTOCKED
+                  </th>
+                  <th class="th-sortable text-center" data-sort="status">
+                    STATUS <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="text-center">
+                    ADMIN ACTIONS
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="inventory-table-body">
+                <!-- Product rows dynamically rendered by admin.js -->
+              </tbody>
+            </table>
+
+            <!-- Alternate Card Grid View (hidden by default) -->
+            <div id="inventory-card-grid" class="inventory-card-grid hidden">
+              <!-- Dynamically populated -->
+            </div>
+
+            <!-- Empty Search State -->
+            <div id="inventory-empty-state" class="inventory-empty-state font-mono hidden">
+              <div class="empty-icon-box">[ 0 MATCHES ]</div>
+              <h3>NO PRODUCTS MATCH YOUR FILTER CRITERIA</h3>
+              <p>Try resetting the search query, category filter, or stock status.</p>
+              <button id="btn-clear-inv-filters" class="hud-btn-dark-sm font-mono mt-4">RESET INVENTORY FILTERS</button>
+            </div>
+          </div>
+
+          <!-- Bottom Inventory Info Callout -->
+          <div class="inventory-legend-strip font-mono">
+            <div class="legend-item">
+              <span class="status-pill status-healthy">HEALTHY</span>
+              <span>Stock level is above reorder point and safety threshold.</span>
+            </div>
+            <div class="legend-item">
+              <span class="status-pill status-low">LOW STOCK</span>
+              <span>Available stock is at or below reorder threshold. Supplier PO recommended.</span>
+            </div>
+            <div class="legend-item">
+              <span class="status-pill status-out">OUT OF STOCK</span>
+              <span>Zero units available. Customers cannot add this RFID SKU to carts.</span>
+            </div>
+            <div class="legend-meta">
+              <span>* RESERVED: Locked in active customer carts during transit before POS settlement.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- TAB VIEW 3: STOCK MOVEMENTS & AUDIT LEDGER          -->
+        <!-- ==================================================== -->
+        <section id="view-movements" class="admin-tab-view">
+          <div class="movements-header-panel font-mono">
+            <div class="movements-title-group">
+              <span class="hud-pill">[AUDIT_LOG]</span>
+              <h2>CHRONOLOGICAL INVENTORY MOVEMENT HISTORY</h2>
+              <span class="meta-tag right">IMMUTABLE STORE AUDIT TRAIL</span>
+            </div>
+            
+            <div class="movements-filter-row">
+              <div class="filter-item">
+                <label>FILTER BY EVENT TYPE:</label>
+                <select id="movement-type-filter" class="admin-select-sm">
+                  <option value="ALL">ALL EVENT TYPES</option>
+                  <option value="RESTOCK">INCOMING RESTOCK</option>
+                  <option value="CHECKOUT">CUSTOMER CHECKOUT</option>
+                  <option value="CYCLE_COUNT">PHYSICAL CYCLE COUNT</option>
+                  <option value="DAMAGE_WRITEOFF">DAMAGE / EXPIRY WRITE-OFF</option>
+                  <option value="RESERVED_RELEASE">CART RESERVED / RELEASE</option>
+                </select>
+              </div>
+
+              <div class="filter-item">
+                <label>FILTER BY PRODUCT:</label>
+                <select id="movement-product-filter" class="admin-select-sm">
+                  <option value="ALL">ALL PRODUCTS</option>
+                </select>
+              </div>
+
+              <button id="btn-export-movements" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
+                <span>💾</span> EXPORT AUDIT LOG
+              </button>
+            </div>
+          </div>
+
+          <div class="movements-table-wrapper">
+            <table class="hud-inventory-table font-mono">
+              <thead>
+                <tr>
+                  <th>TIMESTAMP</th>
+                  <th>PRODUCT SKU & RFID</th>
+                  <th>EVENT ACTION</th>
+                  <th class="text-right">QTY DELTA</th>
+                  <th class="text-right">STOCK BEFORE → AFTER</th>
+                  <th>REFERENCE / OPERATOR</th>
+                  <th>NOTES / REASON</th>
+                </tr>
+              </thead>
+              <tbody id="movements-table-body">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <!-- ==================================================== -->
+      <!-- MODALS & DRAWERS FOR ADMIN ACTIONS                   -->
+      <!-- ==================================================== -->
+
+      <!-- MODAL 1: ADD / EDIT PRODUCT DETAILS -->
+      <div id="modal-product" class="admin-modal-overlay hidden">
+        <div class="admin-modal-box font-mono">
+          <div class="admin-modal-header">
+            <div class="modal-header-title">
+              <span class="modal-icon">■</span>
+              <h3 id="modal-product-title">ADD NEW PRODUCT</h3>
+            </div>
+            <button class="modal-close-btn" data-close-modal="modal-product">✕</button>
+          </div>
+          <form id="form-product" class="admin-modal-form">
+            <input type="hidden" id="prod-form-is-edit" value="false" />
+            
+            <div class="modal-form-grid">
+              <!-- Product Name -->
+              <div class="form-group span-2">
+                <label for="prod-name">PRODUCT NAME *</label>
+                <input type="text" id="prod-name" required placeholder="e.g. Wireless Noise-Cancelling Earbuds" />
+              </div>
+
+              <!-- Product ID / SKU -->
+              <div class="form-group">
+                <label for="prod-id">PRODUCT ID (SKU) *</label>
+                <input type="text" id="prod-id" required placeholder="e.g. PROD-012" />
+              </div>
+
+              <!-- RFID Tag UID -->
+              <div class="form-group">
+                <label for="prod-rfid">RFID TAG UID *</label>
+                <input type="text" id="prod-rfid" required placeholder="e.g. RF-991204" />
+              </div>
+
+              <!-- Category -->
+              <div class="form-group">
+                <label for="prod-category">CATEGORY *</label>
+                <select id="prod-category" required>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Accessories">Accessories</option>
+                  <option value="Snacks">Snacks</option>
+                  <option value="Beverages">Beverages</option>
+                  <option value="Fresh Produce">Fresh Produce</option>
+                </select>
+              </div>
+
+              <!-- Supplier Name -->
+              <div class="form-group">
+                <label for="prod-supplier">SUPPLIER NAME *</label>
+                <input type="text" id="prod-supplier" required placeholder="e.g. Apex Global Supply" />
+              </div>
+
+              <!-- Purchase Cost Price -->
+              <div class="form-group">
+                <label for="prod-cost">PURCHASE COST ($) *</label>
+                <input type="number" id="prod-cost" step="0.01" min="0" required placeholder="0.00" />
+              </div>
+
+              <!-- Selling Retail Price -->
+              <div class="form-group">
+                <label for="prod-price">SELLING PRICE ($) *</label>
+                <input type="number" id="prod-price" step="0.01" min="0" required placeholder="0.00" />
+              </div>
+
+              <!-- Reorder Level -->
+              <div class="form-group">
+                <label for="prod-reorder">REORDER THRESHOLD (UNITS) *</label>
+                <input type="number" id="prod-reorder" min="1" required placeholder="10" />
+              </div>
+
+              <!-- Safety Stock -->
+              <div class="form-group">
+                <label for="prod-safety">SAFETY STOCK BUFFER (UNITS) *</label>
+                <input type="number" id="prod-safety" min="0" required placeholder="5" />
+              </div>
+
+              <!-- Supplier Lead Time -->
+              <div class="form-group">
+                <label for="prod-lead-time">SUPPLIER LEAD TIME (DAYS) *</label>
+                <input type="number" id="prod-lead-time" min="1" required placeholder="3" />
+              </div>
+
+              <!-- Initial On-Hand Stock -->
+              <div class="form-group">
+                <label for="prod-onhand">INITIAL PHYSICAL STOCK (UNITS) *</label>
+                <input type="number" id="prod-onhand" min="0" required placeholder="25" />
+              </div>
+            </div>
+
+            <div class="modal-footer font-mono">
+              <button type="button" class="hud-btn-secondary" data-close-modal="modal-product">CANCEL</button>
+              <button type="submit" class="hud-btn-dark">SAVE PRODUCT RECORD</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL 2: UPDATE STOCK AFTER PHYSICAL COUNT -->
+      <div id="modal-cycle-count" class="admin-modal-overlay hidden">
+        <div class="admin-modal-box font-mono">
+          <div class="admin-modal-header">
+            <div class="modal-header-title">
+              <span class="modal-icon">⚖</span>
+              <h3>PHYSICAL COUNT // CYCLE AUDIT ADJUSTMENT</h3>
+            </div>
+            <button class="modal-close-btn" data-close-modal="modal-cycle-count">✕</button>
+          </div>
+          <form id="form-cycle-count" class="admin-modal-form">
+            <p class="modal-desc">
+              Conduct a physical audit count for a shelf item. The system will compute variance delta and adjust physical on-hand inventory accordingly.
+            </p>
+
+            <div class="form-group">
+              <label for="count-product-select">SELECT PRODUCT FOR AUDIT *</label>
+              <select id="count-product-select" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div class="modal-stock-preview-grid">
+              <div class="preview-metric">
+                <span class="label">CURRENT SYSTEM ON-HAND:</span>
+                <strong id="count-sys-onhand" class="val">20</strong>
+              </div>
+              <div class="preview-metric">
+                <span class="label">ACTIVE RESERVED IN CARTS:</span>
+                <strong id="count-sys-reserved" class="val">2</strong>
+              </div>
+              <div class="preview-metric">
+                <span class="label">CURRENT AVAILABLE:</span>
+                <strong id="count-sys-available" class="val">18</strong>
+              </div>
+            </div>
+
+            <div class="form-group mt-4">
+              <label for="count-physical-input">PHYSICALLY VERIFIED ON-HAND COUNT *</label>
+              <input type="number" id="count-physical-input" min="0" required placeholder="Enter counted units on shelf" />
+            </div>
+
+            <!-- Calculated Variance -->
+            <div class="variance-callout-box">
+              <div class="variance-row">
+                <span>STOCK DISCREPANCY VARIANCE:</span>
+                <strong id="count-discrepancy-badge" class="variance-neutral">0 UNITS</strong>
+              </div>
+              <span class="variance-sub" id="count-discrepancy-sub">No variance detected</span>
+            </div>
+
+            <div class="form-group">
+              <label for="count-reason">ADJUSTMENT REASON CODE *</label>
+              <select id="count-reason" required>
+                <option value="Scheduled Cycle Count">SCHEDULED CYCLE COUNT (ROUTINE)</option>
+                <option value="Discrepancy Found on Floor">DISCREPANCY FOUND ON FLOOR</option>
+                <option value="Misplaced Stock Recovered">MISPLACED STOCK RECOVERED</option>
+                <option value="Shelf Shrinkage / Unaccounted">SHELF SHRINKAGE / UNACCOUNTED</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="count-notes">AUDITOR NOTES / OPERATOR ID</label>
+              <input type="text" id="count-notes" placeholder="e.g. AUDIT-ZONE-4 // Operator Sahil" />
+            </div>
+
+            <div class="modal-footer font-mono">
+              <button type="button" class="hud-btn-secondary" data-close-modal="modal-cycle-count">CANCEL</button>
+              <button type="submit" class="hud-btn-dark">COMMIT AUDIT ADJUSTMENT</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL 3: RECORD RESTOCK OR DAMAGED ITEM -->
+      <div id="modal-restock" class="admin-modal-overlay hidden">
+        <div class="admin-modal-box font-mono">
+          <div class="admin-modal-header">
+            <div class="modal-header-title">
+              <span class="modal-icon">📥</span>
+              <h3>RECORD INVENTORY SHIPMENT OR DAMAGED WRITE-OFF</h3>
+            </div>
+            <button class="modal-close-btn" data-close-modal="modal-restock">✕</button>
+          </div>
+          <form id="form-restock" class="admin-modal-form">
+            <!-- Mode Switcher: Restock vs Damaged -->
+            <div class="restock-mode-tabs">
+              <button type="button" class="mode-tab active" data-mode="restock">📥 INCOMING SHIPMENT RESTOCK</button>
+              <button type="button" class="mode-tab" data-mode="damaged">⚠ WRITE-OFF DAMAGED / EXPIRED</button>
+            </div>
+
+            <input type="hidden" id="restock-mode" value="restock" />
+
+            <div class="form-group">
+              <label for="restock-product-select">TARGET PRODUCT *</label>
+              <select id="restock-product-select" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="restock-qty" id="restock-qty-label">QUANTITY RECEIVED (UNITS) *</label>
+              <input type="number" id="restock-qty" min="1" required placeholder="e.g. 50" />
+            </div>
+
+            <div id="restock-fields-incoming" class="modal-sub-fields">
+              <div class="form-group">
+                <label for="restock-po">PURCHASE ORDER (PO) / INVOICE REF</label>
+                <input type="text" id="restock-po" placeholder="PO-2026-9844" />
+              </div>
+              <div class="form-group">
+                <label for="restock-batch">SUPPLIER LOT / BATCH NUMBER</label>
+                <input type="text" id="restock-batch" placeholder="LOT-B4401" />
+              </div>
+            </div>
+
+            <div id="restock-fields-damaged" class="modal-sub-fields hidden">
+              <div class="form-group">
+                <label for="damage-reason">DAMAGE CLASSIFICATION</label>
+                <select id="damage-reason">
+                  <option value="Broken in Transit / Crushed Packaging">BROKEN IN TRANSIT / PACKAGING TORN</option>
+                  <option value="Expired Product">SHELF-LIFE EXPIRED</option>
+                  <option value="RFID Tag Faulty / Missing">RFID TAG FAULTY / SENSOR REJECT</option>
+                  <option value="Spillage / Water Damaged">SPILLAGE / ENVIRONMENTAL DAMAGE</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="restock-notes">INCIDENT / AUDIT NOTES</label>
+              <input type="text" id="restock-notes" placeholder="e.g. Verified by Receiving Bay 2" />
+            </div>
+
+            <div class="modal-footer font-mono">
+              <button type="button" class="hud-btn-secondary" data-close-modal="modal-restock">CANCEL</button>
+              <button type="submit" class="hud-btn-dark" id="btn-submit-restock">RECORD SHIPMENT INVENTORY</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL 4: SET REORDER THRESHOLDS & SUPPLIER DETAILS -->
+      <div id="modal-thresholds" class="admin-modal-overlay hidden">
+        <div class="admin-modal-box font-mono">
+          <div class="admin-modal-header">
+            <div class="modal-header-title">
+              <span class="modal-icon">⚙</span>
+              <h3>SET REORDER THRESHOLDS & SUPPLIER DETAILS</h3>
+            </div>
+            <button class="modal-close-btn" data-close-modal="modal-thresholds">✕</button>
+          </div>
+          <form id="form-thresholds" class="admin-modal-form">
+            <div class="form-group">
+              <label for="thresh-product-select">SELECT PRODUCT *</label>
+              <select id="thresh-product-select" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div class="modal-form-grid">
+              <div class="form-group">
+                <label for="thresh-reorder">REORDER THRESHOLD LEVEL (UNITS) *</label>
+                <input type="number" id="thresh-reorder" min="1" required />
+                <span class="field-hint">Triggers "Low Stock" alert when available &le; this level.</span>
+              </div>
+
+              <div class="form-group">
+                <label for="thresh-safety">SAFETY STOCK BUFFER (UNITS) *</label>
+                <input type="number" id="thresh-safety" min="0" required />
+                <span class="field-hint">Emergency reserve to guard against supply shock.</span>
+              </div>
+
+              <div class="form-group">
+                <label for="thresh-supplier">PREFERRED SUPPLIER NAME *</label>
+                <input type="text" id="thresh-supplier" required />
+              </div>
+
+              <div class="form-group">
+                <label for="thresh-leadtime">SUPPLIER LEAD TIME (DAYS) *</label>
+                <input type="number" id="thresh-leadtime" min="1" required />
+                <span class="field-hint">Days needed from order placement to bay delivery.</span>
+              </div>
+            </div>
+
+            <div class="modal-footer font-mono">
+              <button type="button" class="hud-btn-secondary" data-close-modal="modal-thresholds">CANCEL</button>
+              <button type="submit" class="hud-btn-dark">UPDATE THRESHOLD RULES</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- DRAWER / MODAL 5: PRODUCT 360 DETAIL VIEW -->
+      <div id="modal-product-detail" class="admin-modal-overlay hidden">
+        <div class="admin-drawer-box font-mono">
+          <div class="admin-modal-header">
+            <div class="modal-header-title">
+              <span class="modal-icon">👁</span>
+              <h3 id="detail-product-name">WIRELESS EARBUDS</h3>
+              <span id="detail-product-status" class="status-pill status-healthy">HEALTHY</span>
+            </div>
+            <button class="modal-close-btn" data-close-modal="modal-product-detail">✕</button>
+          </div>
+
+          <div class="drawer-body">
+            <!-- Top Telemetry Strip -->
+            <div class="drawer-telemetry-banner">
+              <div class="telemetry-item">
+                <span class="label">SKU ID:</span>
+                <strong id="detail-product-id">PROD-004</strong>
+              </div>
+              <div class="telemetry-item">
+                <span class="label">RFID TAG UID:</span>
+                <strong id="detail-product-rfid" class="rfid-tag-mono">RF-994821</strong>
+              </div>
+              <div class="telemetry-item">
+                <span class="label">CATEGORY:</span>
+                <strong id="detail-product-cat">Electronics</strong>
+              </div>
+              <div class="telemetry-item">
+                <span class="label">SUPPLIER:</span>
+                <strong id="detail-product-supplier">Apex Audio Ltd</strong>
+              </div>
+            </div>
+
+            <!-- Stock Triad Breakdown -->
+            <div class="stock-triad-grid">
+              <div class="stock-triad-card">
+                <span class="triad-label">PHYSICAL ON-HAND</span>
+                <h2 id="detail-onhand" class="triad-val">20</h2>
+                <span class="triad-sub">Counted in stockroom & shelves</span>
+              </div>
+
+              <div class="stock-triad-card">
+                <span class="triad-label">RESERVED IN CARTS</span>
+                <h2 id="detail-reserved" class="triad-val text-warning">2</h2>
+                <span class="triad-sub">Active in shopper carts right now</span>
+              </div>
+
+              <div class="stock-triad-card highlight">
+                <span class="triad-label">NET AVAILABLE</span>
+                <h2 id="detail-available" class="triad-val text-accent-green">18</h2>
+                <span class="triad-sub">Available for new shoppers to grab</span>
+              </div>
+            </div>
+
+            <!-- Economics & Margins Card -->
+            <div class="drawer-spec-panel">
+              <div class="spec-panel-header">FINANCIAL METRICS & UNIT ECONOMICS</div>
+              <div class="spec-panel-grid">
+                <div class="spec-row">
+                  <span class="spec-lbl">UNIT PURCHASE COST:</span>
+                  <strong id="detail-cost" class="spec-v">$22.50</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">RETAIL SELLING PRICE:</span>
+                  <strong id="detail-price" class="spec-v">$39.99</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">GROSS PROFIT PER UNIT:</span>
+                  <strong id="detail-unit-profit" class="spec-v text-accent-green">$17.49</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">PROFIT MARGIN:</span>
+                  <strong id="detail-margin" class="spec-v">43.74%</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">TOTAL ON-HAND ASSET VALUE:</span>
+                  <strong id="detail-asset-val" class="spec-v">$799.80</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">TOTAL REPLACEMENT COST:</span>
+                  <strong id="detail-asset-cost" class="spec-v">$450.00</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Replenishment & Supply Chain Rules -->
+            <div class="drawer-spec-panel">
+              <div class="spec-panel-header">REPLENISHMENT & SUPPLY RULES</div>
+              <div class="spec-panel-grid">
+                <div class="spec-row">
+                  <span class="spec-lbl">REORDER THRESHOLD:</span>
+                  <strong id="detail-reorder" class="spec-v">10 Units</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">SAFETY STOCK BUFFER:</span>
+                  <strong id="detail-safety" class="spec-v">5 Units</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">SUPPLIER LEAD TIME:</span>
+                  <strong id="detail-leadtime" class="spec-v">3 Days</strong>
+                </div>
+                <div class="spec-row">
+                  <span class="spec-lbl">LAST RESTOCKED DATE:</span>
+                  <strong id="detail-last-restocked" class="spec-v">2026-10-18</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Movement Audit for this product -->
+            <div class="drawer-spec-panel">
+              <div class="spec-panel-header">RECENT STOCK MOVEMENT HISTORY</div>
+              <div class="drawer-mini-table-wrap">
+                <table class="hud-inventory-table mini font-mono">
+                  <thead>
+                    <tr>
+                      <th>TIMESTAMP</th>
+                      <th>ACTION</th>
+                      <th>DELTA</th>
+                      <th>BALANCE</th>
+                      <th>REF</th>
+                    </tr>
+                  </thead>
+                  <tbody id="detail-movements-tbody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="drawer-footer font-mono">
+            <button id="btn-detail-edit" class="hud-btn-secondary">EDIT PRODUCT</button>
+            <button id="btn-detail-count" class="hud-btn-secondary">VERIFY COUNT</button>
+            <button id="btn-detail-restock" class="hud-btn-dark">RESTOCK SHIPMENT</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notification Container -->
+      <div id="admin-toast-container" class="admin-toast-container font-mono"></div>
+
+    </div>
+
+    <!-- Admin JS Module -->
+    <script type="module" src="/admin.js"></script>
+  </body>
+</html>

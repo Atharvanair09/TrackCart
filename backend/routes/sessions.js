@@ -262,6 +262,20 @@ router.post('/:sessionId/checkout', async (req, res) => {
       [saleOperationId]
     );
 
+    // Decrement inventory_qty in products and log stock movement
+    for (const item of itemsRes.rows) {
+      const prodRes = await client.query('SELECT inventory_qty FROM products WHERE product_id = $1', [item.product_id]);
+      const currentQty = prodRes.rows.length > 0 ? (prodRes.rows[0].inventory_qty || 0) : 0;
+      const newQty = Math.max(0, currentQty - item.quantity);
+      await client.query('UPDATE products SET inventory_qty = $1 WHERE product_id = $2', [newQty, item.product_id]);
+      
+      const movId = `MOV_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      await client.query(`
+        INSERT INTO stock_movements (movement_id, product_id, action, delta, before_qty, after_qty, ref_code, notes)
+        VALUES ($1, $2, 'CHECKOUT', $3, $4, $5, $6, 'Customer cart checkout settlement')
+      `, [movId, item.product_id, -item.quantity, currentQty, newQty, sessionId]);
+    }
+
     // Mark session as completed
     await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
 

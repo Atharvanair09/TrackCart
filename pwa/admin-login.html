@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TrackCart Admin // Security Gateway & Access Control</title>
+    <meta name="description" content="TrackCart Admin Console: Secure authentication portal for store management and inventory telemetry." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/admin.css" />
+    <style>
+      .login-viewport {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 32px 16px;
+        min-height: calc(100vh - 85px);
+        background: radial-gradient(circle at 50% 50%, #f0f0f0 0%, #d8d8d8 100%);
+      }
+
+      .login-terminal-card {
+        width: 100%;
+        max-width: 520px;
+        background: #ffffff;
+        border: 2.5px solid #000000;
+        box-shadow: 6px 6px 0px #000000;
+        display: flex;
+        flex-direction: column;
+        animation: hudFade 0.25s ease-out;
+      }
+
+      .login-card-header {
+        background: #000000;
+        color: #ffffff;
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #000000;
+        letter-spacing: 0.5px;
+      }
+
+      .login-card-header .sys-status {
+        font-size: 0.75rem;
+        background: #222222;
+        padding: 3px 8px;
+        border: 1px solid #444444;
+      }
+
+      .login-card-body {
+        padding: 28px 24px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .login-title-block {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border-bottom: 2px solid #000000;
+        padding-bottom: 16px;
+      }
+
+      .login-title-row {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+
+      .login-title-row h1 {
+        font-family: var(--font-sans);
+        font-weight: 800;
+        font-size: 1.85rem;
+        line-height: 1;
+        letter-spacing: -1px;
+        text-transform: uppercase;
+        margin: 0;
+      }
+
+      .login-subtitle {
+        font-size: 0.75rem;
+        color: #555555;
+        letter-spacing: 0.3px;
+        line-height: 1.4;
+      }
+
+      /* Alert callouts */
+      .login-alert {
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        font-family: var(--font-tech);
+        border: 2px solid #000000;
+        box-shadow: 2px 2px 0px #000000;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        line-height: 1.35;
+      }
+
+      .login-alert.alert-error {
+        background: #ffebe6;
+        border-color: #de350b;
+        color: #bf2600;
+      }
+
+      .login-alert.alert-success {
+        background: #e3fcef;
+        border-color: #00875a;
+        color: #006644;
+      }
+
+      .login-alert.alert-info {
+        background: #f4f5f7;
+        border-color: #000000;
+        color: #000000;
+      }
+
+      /* Input Groups */
+      .login-field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .login-label {
+        font-family: var(--font-tech);
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .login-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .login-input-wrap .input-icon {
+        position: absolute;
+        left: 12px;
+        font-size: 1rem;
+        pointer-events: none;
+        opacity: 0.7;
+      }
+
+      .login-input {
+        width: 100%;
+        padding: 12px 14px 12px 38px;
+        font-family: var(--font-tech);
+        font-size: 0.9rem;
+        border: 2px solid #000000;
+        background: #fafafa;
+        color: #000000;
+        outline: none;
+        transition: background 0.15s, box-shadow 0.15s;
+      }
+
+      .login-input:focus {
+        background: #ffffff;
+        box-shadow: inset 0 0 0 1px #000000, 2px 2px 0px #000000;
+      }
+
+      .login-input.has-toggle {
+        padding-right: 48px;
+      }
+
+      .btn-toggle-pwd {
+        position: absolute;
+        right: 6px;
+        background: #eeeeee;
+        border: 1px solid #000000;
+        cursor: pointer;
+        font-family: var(--font-tech);
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 5px 8px;
+      }
+
+      .btn-toggle-pwd:hover {
+        background: #000000;
+        color: #ffffff;
+      }
+
+      /* Helper autofill pill */
+      .demo-pill-strip {
+        background: #f0f0f0;
+        border: 1px dashed #777777;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .demo-pill-strip .demo-lbl {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #444444;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .demo-action-btn {
+        background: #000000;
+        color: #ffffff;
+        border: 1px solid #000000;
+        font-family: var(--font-tech);
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 6px 10px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.15s;
+      }
+
+      .demo-action-btn:hover {
+        background: #222222;
+        box-shadow: 2px 2px 0px rgba(0,0,0,0.4);
+      }
+
+      /* Submit button */
+      .btn-auth-submit {
+        background: #000000;
+        color: #ffffff;
+        border: 2px solid #000000;
+        box-shadow: 4px 4px 0px #000000;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
+        margin-top: 4px;
+      }
+
+      .btn-auth-submit:hover:not(:disabled) {
+        transform: translate(-1px, -1px);
+        box-shadow: 5px 5px 0px #000000;
+        background: #111111;
+      }
+
+      .btn-auth-submit:active:not(:disabled) {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px #000000;
+      }
+
+      .btn-auth-submit:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .btn-auth-submit .btn-title {
+        font-family: var(--font-tech);
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+
+      .btn-auth-submit .btn-sub {
+        font-size: 0.7rem;
+        opacity: 0.8;
+      }
+
+      .login-card-footer {
+        background: #fafafa;
+        border-top: 2px solid #000000;
+        padding: 14px 20px;
+        font-size: 0.7rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #666666;
+      }
+
+      .login-card-footer a {
+        color: #000000;
+        font-weight: 700;
+        text-decoration: underline;
+      }
+
+      .login-card-footer a:hover {
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body class="admin-body">
+    <div id="admin-app">
+      <!-- 1. Top HUD Global Bar -->
+      <header class="global-hud-bar">
+        <div class="hud-bar-left">
+          <span class="hud-tag">SECURE_GATEWAY</span>
+          <span class="hud-sep">//</span>
+          <span class="hud-node">AUTH_PORTAL_01</span>
+          <span class="hud-sep">//</span>
+          <span class="hud-tag text-accent-green">ENCRYPTED ■</span>
+        </div>
+        <div class="hud-bar-center">
+          <span>STORE_NODE: TC-FLAGSHIP-01</span>
+          <span class="hud-sep">//</span>
+          <span id="hud-live-clock">--:--:-- UTC</span>
+        </div>
+        <div class="hud-bar-right">
+          <span>CLEARANCE: LEVEL_4</span>
+          <span class="hud-sep">//</span>
+          <span>ADMIN_OS v2.6.0</span>
+        </div>
+      </header>
+
+      <!-- 2. Desktop Navigation Bar -->
+      <nav id="admin-top-nav" class="hud-top-nav font-mono">
+        <div class="admin-nav-brand-group">
+          <span class="desktop-nav-brand">TRACKCART // AUTHENTICATION</span>
+          <span class="admin-badge-indicator">RESTRICTED_ACCESS</span>
+        </div>
+
+        <div class="admin-nav-right-actions" style="margin-left: auto;">
+          <a href="/index.html" class="admin-exit-cart-link font-mono" title="Return to Customer Cart Interface">
+            <span class="tab-icon">🛒</span> RETURN TO CART
+          </a>
+        </div>
+      </nav>
+
+      <!-- 3. Main Login Viewport -->
+      <main class="login-viewport">
+        <div class="login-terminal-card">
+          <!-- Terminal Window Header -->
+          <div class="login-card-header font-mono">
+            <div>
+              <span>[SEC_PROTOCOL_256]</span>
+              <span style="color:#888; margin: 0 4px;">//</span>
+              <span>GATEWAY: LIVE</span>
+            </div>
+            <span class="sys-status font-mono">SYS_STATUS: READY</span>
+          </div>
+
+          <!-- Card Content Body -->
+          <div class="login-card-body">
+            <!-- Title Header -->
+            <div class="login-title-block">
+              <div class="login-title-row">
+                <h1>ADMIN</h1>
+                <span class="hud-pill">[PORTAL]</span>
+              </div>
+              <div class="login-title-row">
+                <h1>AUTHENTICATION</h1>
+                <span class="hud-pill">[SEC]</span>
+              </div>
+              <p class="login-subtitle font-mono mt-2">
+                VERIFIED CREDENTIALS REQUIRED FOR TELEMETRY, INVENTORY CONTROL & PRICING REGISTRY.
+              </p>
+            </div>
+
+            <!-- Dynamic Alert Box -->
+            <div id="login-alert-box" class="login-alert alert-info font-mono">
+              <span>■</span>
+              <span id="login-alert-msg">ENTER CREDENTIALS STORED IN POSTGRESQL DATABASE</span>
+            </div>
+
+            <!-- Form -->
+            <form id="form-admin-login" autocomplete="on">
+              <div class="login-field-group">
+                <label for="admin-email" class="login-label">
+                  <span>ADMINISTRATOR IDENTITY [EMAIL]</span>
+                  <span style="font-size:0.65rem; color:#666;">POSTGRES_VERIFIED</span>
+                </label>
+                <div class="login-input-wrap">
+                  <span class="input-icon">✉</span>
+                  <input
+                    type="email"
+                    id="admin-email"
+                    name="email"
+                    class="login-input font-mono"
+                    placeholder="admin@store.com"
+                    value="ojharamakant48@gmail.com"
+                    required
+                    autocomplete="username"
+                  />
+                </div>
+              </div>
+
+              <div class="login-field-group mt-4">
+                <label for="admin-password" class="login-label">
+                  <span>SECURITY ACCESS KEY [PASSWORD]</span>
+                  <span style="font-size:0.65rem; color:#666;">SCRAM-SHA-256</span>
+                </label>
+                <div class="login-input-wrap">
+                  <span class="input-icon">🔑</span>
+                  <input
+                    type="password"
+                    id="admin-password"
+                    name="password"
+                    class="login-input has-toggle font-mono"
+                    placeholder="Enter password"
+                    value="Sahil@1234567"
+                    required
+                    autocomplete="current-password"
+                  />
+                  <button type="button" id="btn-toggle-password" class="btn-toggle-pwd" title="Show or hide password">
+                    SHOW
+                  </button>
+                </div>
+              </div>
+
+              <!-- Quick Demo Credentials Helper -->
+              <div class="demo-pill-strip font-mono mt-4">
+                <div class="demo-lbl">
+                  <span>PRE-CONFIGURED STORE ADMIN CREDENTIALS:</span>
+                  <span class="text-accent-green">DB_SYNCED ■</span>
+                </div>
+                <button type="button" id="btn-fill-demo" class="demo-action-btn">
+                  <span>ojharamakant48@gmail.com // Sahil@1234567</span>
+                  <span>⚡ INSERT</span>
+                </button>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="submit" id="btn-login-submit" class="btn-auth-submit mt-4" style="width: 100%;">
+                <span style="font-size: 1.2rem;">⚡</span>
+                <div style="display: flex; flex-direction: column; text-align: left;">
+                  <strong class="btn-title">AUTHENTICATE & ENTER</strong>
+                  <span class="btn-sub font-mono">INITIATE admin_session_token</span>
+                </div>
+              </button>
+            </form>
+          </div>
+
+          <!-- Card Footer Metadata -->
+          <div class="login-card-footer font-mono">
+            <div>
+              <span>SEC: PBKDF2-SHA512</span>
+              <span style="margin: 0 4px;">//</span>
+              <span>SESSION: 7 DAYS</span>
+            </div>
+            <div>
+              <a href="/index.html">← RETURN TO CART</a>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Toast Container -->
+      <div id="admin-toast-container" class="admin-toast-container font-mono"></div>
+    </div>
+
+    <!-- Admin Login Logic Script -->
+    <script type="module" src="/admin-login.js"></script>
+  </body>
+</html>

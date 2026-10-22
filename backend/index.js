@@ -28,6 +28,10 @@ app.get('/ops-console', (req, res) => {
 app.use('/api/rfid', rfidRoutes);
 const sessionRoutes = require('./routes/sessions');
 app.use('/api/sessions', sessionRoutes);
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
 
 // Database initialization
 initDb().then(() => {
