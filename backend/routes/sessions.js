@@ -171,17 +171,28 @@ router.post('/:sessionId/checkout', async (req, res) => {
       const productId = item.product_id;
 
       // Compute net reserved quantity for this session and product (sum reservations minus releases)
-      const reservationAggRes = await client.query(
-        `SELECT COALESCE(SUM(im.quantity), 0) AS total_reserved
-         FROM inventory_operations io
-         JOIN inventory_movements im ON im.operation_id = io.id
-         WHERE io.operation_type = 'reservation'
-           AND io.session_id = $1
-           AND io.status = 'completed'
-           AND im.product_id = $2
-         FOR UPDATE OF io, im`,
-        [sessionId, productId]
-      );
+// Lock reservation rows for this session and product to ensure concurrency safety
+await client.query(`
+SELECT io.id
+FROM inventory_operations io
+JOIN inventory_movements im ON im.operation_id = io.id
+WHERE io.operation_type = 'reservation'
+  AND io.session_id = $1
+  AND io.status = 'completed'
+  AND im.product_id = $2
+FOR UPDATE
+`, [sessionId, productId]);
+
+const reservationAggRes = await client.query(
+  `SELECT COALESCE(SUM(im.quantity), 0) AS total_reserved
+   FROM inventory_operations io
+   JOIN inventory_movements im ON im.operation_id = io.id
+   WHERE io.operation_type = 'reservation'
+     AND io.session_id = $1
+     AND io.status = 'completed'
+     AND im.product_id = $2`,
+  [sessionId, productId]
+);
       const releaseAggRes = await client.query(
         `SELECT COALESCE(SUM(im.quantity), 0) AS total_released
          FROM inventory_operations ro
