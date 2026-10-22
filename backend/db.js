@@ -71,6 +71,8 @@ async function initDb() {
         reserved_qty INTEGER DEFAULT 0
       );
 
+      ALTER TABLE IF EXISTS products ADD COLUMN IF NOT EXISTS reserved_qty INTEGER DEFAULT 0;
+
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         user_id TEXT UNIQUE NOT NULL,
