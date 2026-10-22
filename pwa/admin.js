@@ -1,6 +1,6 @@
 /**
- * TrackCart Admin OS - Client Logic & Dashboard Controller
- * ALL DATA IS SOURCED DIRECTLY FROM THE POSTGRESQL DATABASE VIA /api/admin/*
+ * TrackCart Admin Dashboard Controller
+ * Connects UI to PostgreSQL Backend via /api/admin/*
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -21,47 +21,33 @@ async function enforceAuth() {
     return false;
   }
 
-  // Display user info in top HUD if available
   if (userJson) {
     try {
       const user = JSON.parse(userJson);
       const identityEl = document.getElementById('hud-admin-identity');
       if (identityEl && user.email) {
-        identityEl.textContent = `ADMIN: ${user.email}`;
+        identityEl.innerHTML = `<span>👤</span> ${user.email}`;
       }
     } catch (e) {}
   }
 
-  // Asynchronously verify with backend
   try {
     const res = await fetch(`${API_BASE}/auth/verify`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     });
-
     if (!res.ok) {
       localStorage.removeItem('trackcart_admin_token');
       localStorage.removeItem('trackcart_admin_user');
       window.location.replace('/admin-login.html');
       return false;
     }
-
-    const data = await res.json();
-    if (data.admin && data.admin.email) {
-      const identityEl = document.getElementById('hud-admin-identity');
-      if (identityEl) {
-        identityEl.textContent = `ADMIN: ${data.admin.email}`;
-      }
-    }
   } catch (err) {
-    console.warn('[auth] Could not verify with backend offline/proxy, session continuing from localStorage token');
+    console.warn('[auth] Network notice:', err.message);
   }
 
   return true;
 }
 
-// Attach logout action
 function setupLogout() {
   const logoutBtn = document.getElementById('btn-admin-logout');
   if (logoutBtn) {
@@ -71,1164 +57,1754 @@ function setupLogout() {
         if (token) {
           await fetch(`${API_BASE}/auth/logout`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
           });
         }
-      } catch (e) {
-        console.warn('Logout network notice:', e.message);
-      } finally {
-        localStorage.removeItem('trackcart_admin_token');
-        localStorage.removeItem('trackcart_admin_user');
-        showToast('Session terminated. Redirecting to login...', 'info');
-        setTimeout(() => {
-          window.location.replace('/admin-login.html');
-        }, 500);
-      }
+      } catch (e) {}
+      localStorage.removeItem('trackcart_admin_token');
+      localStorage.removeItem('trackcart_admin_user');
+      showToast('Signed out. Redirecting...', 'info');
+      setTimeout(() => window.location.replace('/admin-login.html'), 400);
     });
   }
 }
 
 // ==========================================
-// 1. Data Store (Loaded from Database)
+// 1. Global Application State
 // ==========================================
+let isDemoMode = false;
+let currentTab = 'dashboard';
+let currentReportTab = 'sales';
+
 let products = [];
 let movements = [];
-let dbKPIs = null;
-let dbAnalytics = null;
-let isFirstLoad = true;
 let sessionsData = [];
 let salesData = [];
-let salesTotals = { count: 0, revenue: 0, tax: 0 };
+let expiryData = [];
+let forecastData = [];
+let basketData = null;
+let dashboardStats = null;
+let analyticsData = null;
 
-// Active Filters State
-let analyticsFilter = {
-  datePreset: 'today',
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: new Date().toISOString().split('T')[0],
-  category: 'ALL',
-  productId: 'ALL',
-  granularity: 'daily',
-  chartMetric: 'revenue'
-};
-
+// Filter States
 let inventoryFilter = {
   search: '',
   category: 'ALL',
   status: 'ALL',
-  sort: 'available-asc',
-  view: 'table'
+  sort: 'available-asc'
 };
 
-// Chart.js instances
-let revenueTrendChart = null;
-let categorySalesChart = null;
-let topProductsChart = null;
-let trafficVelocityChart = null;
+let movementsFilter = {
+  search: '',
+  action: 'ALL'
+};
+
+let expiryFilter = 'ALL';
+let forecastFilterClass = 'ALL';
+let forecastWindowDays = 30;
+
+// Chart.js Instances Registry
+const charts = {};
 
 // ==========================================
-// 2. Computed Properties & Helpers
+// 2. Utility Helpers
 // ==========================================
-function getAvailableStock(prod) {
-  return Math.max(0, (prod.onHand || 0) - (prod.reserved || 0));
-}
-
-function getProductStatus(prod) {
-  const avail = getAvailableStock(prod);
-  if (avail <= 0) return 'Out of stock';
-  if (avail <= prod.reorderLevel) return 'Low stock';
-  return 'Healthy';
-}
-
 function formatCurrency(val) {
   return '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatNumber(val) {
+  return Number(val || 0).toLocaleString('en-US');
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('admin-toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
 }
 
 function updateHUDClock() {
   const clockEl = document.getElementById('hud-live-clock');
   if (clockEl) {
     const now = new Date();
-    clockEl.textContent = now.toTimeString().split(' ')[0] + ' UTC';
+    clockEl.textContent = now.toLocaleTimeString();
   }
 }
+setInterval(updateHUDClock, 1000);
 
 // ==========================================
-// 3. Database Data Fetching (Live Sync)
+// 3. API Fetchers
 // ==========================================
-async function loadDashboardData(silent = false) {
+async function fetchWithAuth(url, options = {}) {
   const token = getAuthToken();
-  if (!token) return;
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
 
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    window.location.replace('/admin-login.html');
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
+async function loadDashboardData() {
   try {
-    const res = await fetch(`${API_BASE}/admin/dashboard`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (res.status === 401) {
-      localStorage.removeItem('trackcart_admin_token');
-      window.location.replace('/admin-login.html');
-      return;
-    }
-
-    if (!res.ok) {
-      throw new Error(`Server returned ${res.status}`);
-    }
-
+    const demoQuery = isDemoMode ? '?demo=true' : '';
+    const res = await fetchWithAuth(`${API_BASE}/admin/dashboard${demoQuery}`);
     const data = await res.json();
+
     if (data.success) {
+      dashboardStats = data;
       products = data.products || [];
       movements = data.movements || [];
-      dbKPIs = data.kpis || null;
-      dbAnalytics = data.analytics || null;
-
-      populateProductDropdowns();
-      updateKPICards();
+      renderDashboard();
       renderInventoryTable();
       renderMovementsTable();
-      
-      if (isFirstLoad) {
-        initAnalyticsCharts();
-        isFirstLoad = false;
-      } else {
-        updateAnalyticsChartsFromDb();
-      }
-
-      updateAnalyticsFilters();
-
-      if (!silent) {
-        showToast('Live database telemetry synced successfully ■', 'success');
-      }
+      populateProductSelects();
     }
   } catch (err) {
-    console.error('Failed to load dashboard data from database:', err);
-    if (!silent) {
-      showToast('Error syncing with database: ' + err.message, 'error');
-    }
+    console.error('Error loading dashboard:', err);
+    showToast('Failed to load dashboard data', 'error');
   }
 }
 
-// ==========================================
-// 4. Top KPI Cards & Summary Calculation
-// ==========================================
-function updateKPICards() {
-  let todaySales = dbKPIs?.todaySales ?? 0;
-  let grossProfit = dbKPIs?.grossProfit ?? 0;
-  let completedOrders = dbKPIs?.completedOrders ?? 0;
-  let lowStockCount = dbKPIs?.lowStockCount ?? 0;
+async function loadSessionsData() {
+  try {
+    const res = await fetchWithAuth(`${API_BASE}/admin/sessions?limit=50`);
+    const data = await res.json();
+    if (data.success) {
+      sessionsData = data.sessions || [];
+      renderSessionsTable();
+    }
+  } catch (err) {
+    console.error('Error loading sessions:', err);
+  }
+}
 
-  // If local product count is available, verify counts
-  let totalOnHand = 0;
-  let totalReserved = 0;
-  let totalAssetVal = 0;
+async function loadSalesData() {
+  try {
+    const start = document.getElementById('sales-start-date')?.value;
+    const end = document.getElementById('sales-end-date')?.value;
+    let url = `${API_BASE}/admin/sales?limit=100`;
+    if (start && end) url += `&startDate=${start}&endDate=${end}`;
 
-  products.forEach(p => {
-    totalOnHand += (p.onHand || 0);
-    totalReserved += (p.reserved || 0);
-    totalAssetVal += ((p.onHand || 0) * (p.price || 0));
-  });
+    const res = await fetchWithAuth(url);
+    const data = await res.json();
+    if (data.success) {
+      salesData = data.sales || [];
+      renderSalesSection(data.totals);
+    }
+  } catch (err) {
+    console.error('Error loading sales:', err);
+  }
+}
 
-  const elSales = document.getElementById('kpi-today-sales');
-  const elOrders = document.getElementById('kpi-completed-orders');
-  const elLowStock = document.getElementById('kpi-low-stock-count');
-  const elProfit = document.getElementById('kpi-gross-profit');
+async function loadExpiryData() {
+  try {
+    const demoQuery = isDemoMode ? '?demo=true' : '';
+    const res = await fetchWithAuth(`${API_BASE}/admin/expiry${demoQuery}`);
+    const data = await res.json();
+    if (data.success) {
+      expiryData = data.items || [];
+      renderExpirySection();
+    }
+  } catch (err) {
+    console.error('Error loading expiry data:', err);
+  }
+}
 
-  if (elSales) elSales.textContent = formatCurrency(todaySales);
-  if (elOrders) elOrders.textContent = String(completedOrders);
-  if (elLowStock) elLowStock.textContent = String(lowStockCount);
-  if (elProfit) elProfit.textContent = formatCurrency(grossProfit);
+async function loadForecastData() {
+  try {
+    const demoQuery = isDemoMode ? `?demo=true&window=${forecastWindowDays}` : `?window=${forecastWindowDays}`;
+    const res = await fetchWithAuth(`${API_BASE}/admin/demand-forecast${demoQuery}`);
+    const data = await res.json();
+    if (data.success) {
+      forecastData = data.forecast || [];
+      renderForecastSection();
+    }
+  } catch (err) {
+    console.error('Error loading forecast data:', err);
+  }
+}
 
-  const elSumOnHand = document.getElementById('sum-on-hand');
-  const elSumReserved = document.getElementById('sum-reserved');
-  const elSumAvailable = document.getElementById('sum-available');
-  const elSumAssetVal = document.getElementById('sum-asset-val');
-  const elTotalSkus = document.getElementById('inv-total-skus-badge');
+async function loadMarketBasketData() {
+  try {
+    const demoQuery = isDemoMode ? '?demo=true' : '';
+    const res = await fetchWithAuth(`${API_BASE}/admin/market-basket${demoQuery}`);
+    const data = await res.json();
+    if (data.success) {
+      basketData = data;
+      renderMarketBasketSection();
+    }
+  } catch (err) {
+    console.error('Error loading basket data:', err);
+  }
+}
 
-  if (elSumOnHand) elSumOnHand.textContent = String(totalOnHand);
-  if (elSumReserved) elSumReserved.textContent = String(totalReserved);
-  if (elSumAvailable) elSumAvailable.textContent = String(Math.max(0, totalOnHand - totalReserved));
-  if (elSumAssetVal) elSumAssetVal.textContent = formatCurrency(totalAssetVal);
-  if (elTotalSkus) elTotalSkus.textContent = `${products.length} PRODUCTS REGISTERED`;
+async function loadAnalyticsData() {
+  try {
+    const demoQuery = isDemoMode ? '?demo=true' : '';
+    const res = await fetchWithAuth(`${API_BASE}/admin/analytics${demoQuery}`);
+    const data = await res.json();
+    if (data.success) {
+      analyticsData = data;
+      renderAllCharts();
+    }
+  } catch (err) {
+    console.error('Error loading analytics:', err);
+  }
+}
+
+async function refreshAllData() {
+  showToast('Synchronizing store intelligence...', 'info');
+  await Promise.all([
+    loadDashboardData(),
+    loadSessionsData(),
+    loadSalesData(),
+    loadExpiryData(),
+    loadForecastData(),
+    loadMarketBasketData(),
+    loadAnalyticsData()
+  ]);
+  showToast('Store data synchronized successfully', 'success');
 }
 
 // ==========================================
-// 5. Inventory Table & Card View Rendering
+// 4. View Rendering & UI Binding
 // ==========================================
-function renderInventoryTable() {
-  const tbody = document.getElementById('inventory-table-body');
-  const cardGrid = document.getElementById('inventory-card-grid');
-  const emptyState = document.getElementById('inventory-empty-state');
-  const table = document.getElementById('inventory-table');
 
+// Dashboard Overview Rendering
+function renderDashboard() {
+  if (!dashboardStats) return;
+
+  const kpis = dashboardStats.kpis || {};
+  const insights = dashboardStats.storeInsights || {};
+  const priorities = dashboardStats.todaysPriorities || [];
+
+  // 4 Primary KPI Cards
+  const totalProdEl = document.getElementById('dash-total-products');
+  if (totalProdEl) totalProdEl.textContent = formatNumber(kpis.totalProducts);
+
+  const availStockEl = document.getElementById('dash-available-stock');
+  if (availStockEl) availStockEl.textContent = formatNumber(kpis.availableStock);
+
+  const stockBreakdownEl = document.getElementById('dash-stock-breakdown');
+  if (stockBreakdownEl) {
+    stockBreakdownEl.textContent = `Physical: ${formatNumber(kpis.totalOnHand)} | Reserved: ${formatNumber(kpis.totalReserved)}`;
+  }
+
+  const activeCartsEl = document.getElementById('dash-active-carts');
+  if (activeCartsEl) activeCartsEl.textContent = formatNumber(kpis.activeShoppingCarts);
+
+  const cartsSubEl = document.getElementById('dash-carts-subtext');
+  if (cartsSubEl) {
+    cartsSubEl.textContent = `${kpis.activeShoppingCarts} active session(s) in-store`;
+  }
+
+  const todaySalesEl = document.getElementById('dash-today-sales');
+  if (todaySalesEl) todaySalesEl.textContent = formatCurrency(kpis.todaySales);
+
+  const ordersCountEl = document.getElementById('dash-orders-count');
+  if (ordersCountEl) {
+    ordersCountEl.textContent = `Completed Orders: ${formatNumber(kpis.completedOrders)}`;
+  }
+
+  // Render Today's Priorities
+  const prioGrid = document.getElementById('dashboard-priorities-grid');
+  if (prioGrid) {
+    prioGrid.innerHTML = priorities.map(p => `
+      <div class="priority-card" data-jump-tab="${p.targetTab || 'inventory'}" data-jump-id="${p.targetId || ''}">
+        <div>
+          <div class="priority-card-top">
+            <span class="priority-type-pill ${p.type}">${p.badge}</span>
+          </div>
+          <h4>${p.title}</h4>
+          <p>${p.subtitle}</p>
+        </div>
+        <div class="priority-action-link">
+          ${p.actionLabel || 'Take Action'} &rarr;
+        </div>
+      </div>
+    `).join('');
+
+    // Attach click handlers
+    prioGrid.querySelectorAll('.priority-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const targetTab = card.getAttribute('data-jump-tab');
+        if (targetTab) switchTab(targetTab);
+      });
+    });
+  }
+
+  // Render Store Insights Lists
+  // 1. Low Stock & Reorders
+  const lowStockList = document.getElementById('insight-low-stock-list');
+  if (lowStockList) {
+    const items = insights.lowStock || [];
+    if (items.length === 0) {
+      lowStockList.innerHTML = `<div class="insight-item"><span style="color:var(--color-success); font-weight:600;">✅ All catalog items meet safety stock thresholds</span></div>`;
+    } else {
+      lowStockList.innerHTML = items.slice(0, 4).map(item => `
+        <div class="insight-item">
+          <div class="insight-item-left">
+            <span class="insight-item-title">${item.name}</span>
+            <span class="insight-item-sub">Available: ${item.available} units &bull; Threshold: ${item.reorderLevel}</span>
+          </div>
+          <span class="status-pill status-low-stock">Reorder +${item.suggestedReorderQty}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // 2. Expiry Watch
+  const expiryList = document.getElementById('insight-expiry-list');
+  if (expiryList) {
+    const items = insights.expiringSoon || [];
+    if (items.length === 0) {
+      expiryList.innerHTML = `<div class="insight-item"><span style="color:var(--color-success); font-weight:600;">✅ No batches expiring within 30 days</span></div>`;
+    } else {
+      expiryList.innerHTML = items.slice(0, 4).map(item => `
+        <div class="insight-item">
+          <div class="insight-item-left">
+            <span class="insight-item-title">${item.name}</span>
+            <span class="insight-item-sub">Batch: ${item.batchNumber} &bull; Expiry: ${item.expiryDate}</span>
+          </div>
+          <span class="status-pill ${item.isExpired ? 'status-expired' : 'status-expiring-7d'}">
+            ${item.isExpired ? 'Expired' : `${item.daysUntilExpiry}d remaining`}
+          </span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // 3. Suggested Combos
+  const combosList = document.getElementById('insight-combos-list');
+  if (combosList) {
+    const items = insights.suggestedCombos || [];
+    if (items.length === 0) {
+      combosList.innerHTML = `<div class="insight-item"><span style="color:var(--text-muted);">Awaiting multi-item transactions</span></div>`;
+    } else {
+      combosList.innerHTML = items.slice(0, 3).map(c => `
+        <div class="insight-item">
+          <div class="insight-item-left">
+            <span class="insight-item-title">${c.title}</span>
+            <span class="insight-item-sub">${c.transactions} checkout pairings &bull; Lift: ${c.lift}x</span>
+          </div>
+          <span class="status-pill status-active">Bundle Promo</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // 4. Recent Activity
+  const activityList = document.getElementById('insight-activity-list');
+  if (activityList) {
+    const items = insights.recentActivity || [];
+    activityList.innerHTML = items.slice(0, 4).map(m => `
+      <div class="insight-item">
+        <div class="insight-item-left">
+          <span class="insight-item-title">${m.action} &bull; ${m.productName}</span>
+          <span class="insight-item-sub">${m.timestamp} &bull; Ref: ${m.ref}</span>
+        </div>
+        <strong style="color:${m.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)'}; font-size:0.85rem;">
+          ${m.delta > 0 ? `+${m.delta}` : m.delta}
+        </strong>
+      </div>
+    `).join('');
+  }
+}
+
+// Products & Inventory Rendering
+function renderInventoryTable() {
+  const tbody = document.getElementById('inventory-tbody');
   if (!tbody) return;
 
-  // Filter products
+  const search = inventoryFilter.search.toLowerCase().trim();
+  const category = inventoryFilter.category;
+  const status = inventoryFilter.status;
+
   let filtered = products.filter(p => {
-    if (inventoryFilter.search) {
-      const q = inventoryFilter.search.toLowerCase();
-      const matchName = (p.name || '').toLowerCase().includes(q);
-      const matchId = (p.id || '').toLowerCase().includes(q);
-      const matchRfid = (p.rfid || '').toLowerCase().includes(q);
-      const matchCat = (p.category || '').toLowerCase().includes(q);
-      if (!matchName && !matchId && !matchRfid && !matchCat) return false;
-    }
-
-    if (inventoryFilter.category !== 'ALL' && p.category !== inventoryFilter.category) {
-      return false;
-    }
-
-    if (inventoryFilter.status !== 'ALL') {
-      const status = getProductStatus(p);
-      if (status !== inventoryFilter.status) return false;
-    }
-
-    return true;
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(search) ||
+      p.id.toLowerCase().includes(search) ||
+      (p.rfid && p.rfid.toLowerCase().includes(search));
+    const matchCat = category === 'ALL' || p.category === category;
+    const matchStatus = status === 'ALL' || p.status === status;
+    return matchSearch && matchCat && matchStatus;
   });
 
-  // Sort
-  filtered.sort((a, b) => {
-    const availA = getAvailableStock(a);
-    const availB = getAvailableStock(b);
-    switch (inventoryFilter.sort) {
-      case 'available-asc': return availA - availB;
-      case 'available-desc': return availB - availA;
-      case 'name-asc': return a.name.localeCompare(b.name);
-      case 'onhand-desc': return b.onHand - a.onHand;
-      case 'price-desc': return b.price - a.price;
-      case 'margin-desc':
-        const marginA = ((a.price - a.cost) / (a.price || 1));
-        const marginB = ((b.price - b.cost) / (b.price || 1));
-        return marginB - marginA;
-      default: return 0;
-    }
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = '';
-    if (cardGrid) cardGrid.innerHTML = '';
-    if (emptyState) emptyState.classList.remove('hidden');
-    if (table) table.classList.add('hidden');
-    return;
-  } else {
-    if (emptyState) emptyState.classList.add('hidden');
-    if (table && inventoryFilter.view === 'table') table.classList.remove('hidden');
+  // Sorting
+  if (inventoryFilter.sort === 'available-asc') {
+    filtered.sort((a, b) => a.available - b.available);
+  } else if (inventoryFilter.sort === 'available-desc') {
+    filtered.sort((a, b) => b.available - a.available);
+  } else if (inventoryFilter.sort === 'name-asc') {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (inventoryFilter.sort === 'price-desc') {
+    filtered.sort((a, b) => b.price - a.price);
   }
 
-  // Render Dense Table from real DB rows
-  let html = '';
-  filtered.forEach(p => {
-    const available = getAvailableStock(p);
-    const status = getProductStatus(p);
-    const marginPct = p.price > 0 ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : '0.0';
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-muted);">No products match the selected criteria.</td></tr>`;
+    return;
+  }
 
-    let statusClass = 'status-healthy';
-    let availClass = '';
-    if (status === 'Low stock') {
-      statusClass = 'status-low';
-      availClass = 'low-stock';
-    } else if (status === 'Out of stock') {
-      statusClass = 'status-out';
-      availClass = 'out-of-stock';
-    }
+  tbody.innerHTML = filtered.map(p => {
+    let statusClass = 'status-in-stock';
+    if (p.status === 'Out of Stock') statusClass = 'status-out-stock';
+    else if (p.status === 'Low Stock') statusClass = 'status-low-stock';
 
-    html += `
-      <tr data-product-id="${p.id}">
+    return `
+      <tr>
         <td>
-          <div class="product-cell-main">
-            <span class="product-cell-name">${p.name}</span>
-            <div class="product-cell-meta">
-              <span>ID: <strong>${p.id}</strong></span>
-              <span>//</span>
-              <span class="rfid-chip">RFID: ${p.rfid}</span>
-            </div>
-          </div>
+          <div style="font-weight:600; color:var(--text-primary);">${p.name}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${p.id}</div>
         </td>
-        <td class="text-center font-mono">
-          <span class="hud-pill">[${(p.category || 'GENERAL').toUpperCase()}]</span>
-        </td>
-        <td class="text-right">
-          <strong class="stock-val-onhand">${p.onHand}</strong>
-        </td>
-        <td class="text-right">
-          <span class="stock-val-reserved">${p.reserved}</span>
-        </td>
-        <td class="text-right">
-          <strong class="stock-val-available ${availClass}">${available}</strong>
-        </td>
-        <td class="text-right font-mono">
-          <div class="stock-pricing-cell">
-            <span class="price-selling">${formatCurrency(p.price)}</span>
-            <span class="price-cost">COST: ${formatCurrency(p.cost)}</span>
-            <span class="price-margin-chip">${marginPct}% MRG</span>
-          </div>
-        </td>
-        <td class="text-center font-mono">
-          <span>${p.reorderLevel} / ${p.safetyStock}</span>
-        </td>
-        <td class="text-center font-mono">
-          <span>${p.leadTimeDays}d</span>
-        </td>
-        <td class="text-center font-mono">
-          <span>${p.lastRestocked}</span>
-        </td>
-        <td class="text-center">
-          <span class="status-pill ${statusClass}">${status.toUpperCase()}</span>
-        </td>
-        <td class="text-center">
-          <div class="table-actions-group">
-            <button class="btn-row-action btn-row-view" data-id="${p.id}" title="View 360 Product Details">👁 VIEW</button>
-            <button class="btn-row-action btn-row-count" data-id="${p.id}" title="Cycle Audit / Count">⚖ COUNT</button>
-            <button class="btn-row-action btn-row-restock" data-id="${p.id}" title="Restock / Shipment">📥 RESTOCK</button>
+        <td style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-secondary);">${p.rfid || 'N/A'}</td>
+        <td><span class="status-pill status-active" style="background:var(--bg-surface-secondary); color:var(--text-secondary); border-color:var(--border-subtle);">${p.category || 'General'}</span></td>
+        <td style="text-align:right; font-weight:600;">${formatCurrency(p.price)}</td>
+        <td style="text-align:right; font-weight:600;">${p.onHand}</td>
+        <td style="text-align:right; color:var(--color-warning-dark); font-weight:600;">${p.reserved}</td>
+        <td style="text-align:right; font-weight:700; color:${p.available === 0 ? 'var(--color-danger)' : 'var(--color-success-dark)'};">${p.available}</td>
+        <td><span class="status-pill ${statusClass}">${p.status}</span></td>
+        <td style="font-size:0.8rem; color:${p.expiryDate ? 'var(--text-secondary)' : 'var(--text-muted)'};">${p.expiryDate || '—'}</td>
+        <td style="text-align:right; font-weight:600;">${p.soldUnits || 0}</td>
+        <td style="text-align:center;">
+          <div class="table-btn-group" style="justify-content:center;">
+            <button class="table-btn primary btn-quick-restock" data-product-id="${p.id}" title="Receive new stock">Restock</button>
+            <button class="table-btn btn-view-360" data-product-id="${p.id}" title="View 360 Product Detail">Detail</button>
+            <button class="table-btn btn-quick-edit" data-product-id="${p.id}" title="Edit product parameters">Edit</button>
           </div>
         </td>
       </tr>
     `;
-  });
-  tbody.innerHTML = html;
+  }).join('');
 
-  // Render Grid Cards
-  if (cardGrid) {
-    let cardHtml = '';
-    filtered.forEach(p => {
-      const available = getAvailableStock(p);
-      const status = getProductStatus(p);
-      let statusClass = 'status-healthy';
-      if (status === 'Low stock') statusClass = 'status-low';
-      if (status === 'Out of stock') statusClass = 'status-out';
-
-      cardHtml += `
-        <div class="inv-card font-mono" data-product-id="${p.id}">
-          <div class="inv-card-header">
-            <span>${p.id} // ${p.category}</span>
-            <span class="status-pill ${statusClass}">${status}</span>
-          </div>
-          <div class="inv-card-body">
-            <span class="inv-card-title">${p.name}</span>
-            <div class="rfid-chip">RFID: ${p.rfid}</div>
-            
-            <div class="inv-card-stock-row">
-              <div>
-                <span class="chip-label">ON-HAND</span>
-                <strong>${p.onHand}</strong>
-              </div>
-              <div>
-                <span class="chip-label">RESERVED</span>
-                <span>${p.reserved}</span>
-              </div>
-              <div>
-                <span class="chip-label">AVAIL</span>
-                <strong>${available}</strong>
-              </div>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; font-size:0.75rem;">
-              <span>SELL: <strong>${formatCurrency(p.price)}</strong></span>
-              <span>COST: ${formatCurrency(p.cost)}</span>
-            </div>
-          </div>
-          <div class="inv-card-footer">
-            <span style="font-size:0.65rem; color:#666;">Lead: ${p.leadTimeDays}d // Reorder: ${p.reorderLevel}</span>
-            <button class="btn-row-action btn-row-view" data-id="${p.id}">DETAIL →</button>
-          </div>
-        </div>
-      `;
+  // Attach button events
+  tbody.querySelectorAll('.btn-quick-restock').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-product-id');
+      openRestockModal(id);
     });
-    cardGrid.innerHTML = cardHtml;
-  }
+  });
 
-  attachTableRowListeners();
+  tbody.querySelectorAll('.btn-view-360').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-product-id');
+      openProduct360(id);
+    });
+  });
+
+  tbody.querySelectorAll('.btn-quick-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-product-id');
+      openEditProductModal(id);
+    });
+  });
 }
 
-function attachTableRowListeners() {
-  document.querySelectorAll('.btn-row-view').forEach(btn => {
-    btn.onclick = () => openProductDetail(btn.dataset.id);
-  });
-  document.querySelectorAll('.btn-row-count').forEach(btn => {
-    btn.onclick = () => openCycleCountModal(btn.dataset.id);
-  });
-  document.querySelectorAll('.btn-row-restock').forEach(btn => {
-    btn.onclick = () => openRestockModal(btn.dataset.id);
-  });
-}
-
-// ==========================================
-// 6. Stock Movements Audit Ledger Rendering
-// ==========================================
+// Movements Audit Table Rendering
 function renderMovementsTable() {
-  const tbody = document.getElementById('movements-table-body');
-  const typeFilter = document.getElementById('movement-type-filter')?.value || 'ALL';
-  const prodFilter = document.getElementById('movement-product-filter')?.value || 'ALL';
-
+  const tbody = document.getElementById('movements-tbody');
   if (!tbody) return;
+
+  const search = movementsFilter.search.toLowerCase().trim();
+  const action = movementsFilter.action;
 
   const filtered = movements.filter(m => {
-    if (typeFilter !== 'ALL' && m.action !== typeFilter) return false;
-    if (prodFilter !== 'ALL' && m.productId !== prodFilter) return false;
-    return true;
+    const matchSearch = !search ||
+      m.productName.toLowerCase().includes(search) ||
+      m.productId.toLowerCase().includes(search) ||
+      m.id.toLowerCase().includes(search) ||
+      (m.ref && m.ref.toLowerCase().includes(search));
+    const matchAction = action === 'ALL' || m.action === action;
+    return matchSearch && matchAction;
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:24px;">NO AUDIT MOVEMENTS RECORDED IN DATABASE</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-muted);">No stock movements recorded.</td></tr>`;
     return;
   }
 
-  let html = '';
-  filtered.forEach(m => {
-    let badgeClass = 'badge-checkout';
-    if (m.action === 'RESTOCK') badgeClass = 'badge-restock';
-    if (m.action === 'CYCLE_COUNT') badgeClass = 'badge-cycle';
-    if (m.action === 'DAMAGE_WRITEOFF') badgeClass = 'badge-damage';
-    if (m.action === 'RESERVED_RELEASE') badgeClass = 'badge-reserve';
+  tbody.innerHTML = filtered.map(m => {
+    let badgeClass = 'status-in-stock';
+    if (m.action === 'DAMAGE_WRITEOFF') badgeClass = 'status-out-stock';
+    else if (m.action === 'CHECKOUT') badgeClass = 'status-active';
+    else if (m.action === 'CYCLE_COUNT') badgeClass = 'status-low-stock';
 
-    const deltaSign = m.delta > 0 ? `+${m.delta}` : `${m.delta}`;
-    const deltaClass = m.delta > 0 ? 'delta-positive' : 'delta-negative';
-
-    html += `
+    return `
       <tr>
-        <td>${m.timestamp}</td>
+        <td style="font-size:0.8rem; color:var(--text-muted); font-family:var(--font-mono);">${m.timestamp}</td>
+        <td style="font-family:var(--font-mono); font-weight:600;">${m.id}</td>
         <td>
-          <strong>${m.productName}</strong>
-          <span style="font-size:0.65rem; color:#666;"> (${m.productId} // ${m.rfid})</span>
+          <div style="font-weight:600;">${m.productName}</div>
+          <div style="font-size:0.72rem; color:var(--text-muted);">${m.productId}</div>
         </td>
-        <td>
-          <span class="movement-badge ${badgeClass}">${m.action.replace('_', ' ')}</span>
+        <td style="font-family:var(--font-mono); font-size:0.75rem;">${m.rfid || 'N/A'}</td>
+        <td><span class="status-pill ${badgeClass}">${m.action}</span></td>
+        <td style="text-align:right; font-weight:700; color:${m.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
+          ${m.delta > 0 ? `+${m.delta}` : m.delta}
         </td>
-        <td class="text-right">
-          <span class="${deltaClass}">${deltaSign}</span>
-        </td>
-        <td class="text-right">
-          ${m.beforeQty} → <strong>${m.afterQty}</strong>
-        </td>
-        <td><strong>${m.ref}</strong></td>
-        <td style="color:#555;">${m.notes}</td>
+        <td style="text-align:right; color:var(--text-muted);">${m.beforeQty}</td>
+        <td style="text-align:right; font-weight:600;">${m.afterQty}</td>
+        <td style="font-family:var(--font-mono); font-size:0.78rem;">${m.ref}</td>
+        <td style="font-size:0.8rem; color:var(--text-secondary);">${m.notes}</td>
       </tr>
     `;
+  }).join('');
+}
+
+// Sessions Table Rendering
+function renderSessionsTable() {
+  const tbody = document.getElementById('sessions-tbody');
+  if (!tbody) return;
+
+  const filterStatus = document.getElementById('session-filter-status')?.value || 'ALL';
+  const filtered = sessionsData.filter(s => filterStatus === 'ALL' || s.status === filterStatus);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--text-muted);">No shopping cart sessions found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(s => `
+    <tr>
+      <td style="font-family:var(--font-mono); font-weight:600;">${s.session_id}</td>
+      <td style="font-family:var(--font-mono); font-size:0.85rem;">${s.cart_id}</td>
+      <td>${s.user_id || 'Guest Shopper'}</td>
+      <td>
+        <span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-healthy'}">
+          ${s.status === 'active' ? 'Active In-Store' : 'Completed'}
+        </span>
+      </td>
+      <td style="font-size:0.8rem; color:var(--text-muted);">${s.started_at}</td>
+      <td style="text-align:right; font-weight:600;">${s.item_count}</td>
+      <td style="text-align:right; font-weight:700;">${formatCurrency(s.subtotal)}</td>
+      <td style="text-align:center;">
+        <button class="table-btn primary btn-view-session-items" data-session-id="${s.session_id}">
+          Inspect Items (${s.items?.length || 0})
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.btn-view-session-items').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sessId = btn.getAttribute('data-session-id');
+      const sess = sessionsData.find(s => s.session_id === sessId);
+      if (sess) openSessionItemsModal(sess);
+    });
+  });
+}
+
+// Sales Table & KPI Rendering
+function renderSalesSection(totals) {
+  if (totals) {
+    const revEl = document.getElementById('sales-kpi-revenue');
+    if (revEl) revEl.textContent = formatCurrency(totals.revenue);
+
+    const ordEl = document.getElementById('sales-kpi-orders');
+    if (ordEl) ordEl.textContent = formatNumber(totals.count);
+
+    const aovEl = document.getElementById('sales-kpi-aov');
+    if (aovEl && totals.count > 0) {
+      aovEl.textContent = formatCurrency(totals.revenue / totals.count);
+    }
+  }
+
+  const tbody = document.getElementById('sales-tbody');
+  if (!tbody) return;
+
+  if (salesData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:32px; color:var(--text-muted);">No sales records found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = salesData.map(s => `
+    <tr>
+      <td style="font-family:var(--font-mono); font-weight:600;">${s.sale_id}</td>
+      <td style="font-size:0.8rem; color:var(--text-muted);">${s.completed_at}</td>
+      <td style="font-family:var(--font-mono); font-size:0.8rem;">${s.session_id || 'DIRECT'}</td>
+      <td style="text-align:right; font-weight:600;">${s.item_count}</td>
+      <td style="text-align:right;">${formatCurrency(s.subtotal)}</td>
+      <td style="text-align:right; color:var(--text-muted);">${formatCurrency(s.tax_amount)}</td>
+      <td style="text-align:right; font-weight:700; color:var(--color-primary);">${formatCurrency(s.total)}</td>
+      <td><span class="status-pill status-healthy">Paid / Verified</span></td>
+      <td style="text-align:center;">
+        <button class="table-btn primary btn-view-sale-items" data-sale-id="${s.sale_id}">
+          View Items (${s.lineItems?.length || 0})
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.btn-view-sale-items').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const saleId = btn.getAttribute('data-sale-id');
+      const sale = salesData.find(s => s.sale_id === saleId);
+      if (sale) openSaleReceiptModal(sale);
+    });
+  });
+}
+
+// Expiry Section Rendering
+function renderExpirySection() {
+  const tbody = document.getElementById('expiry-tbody');
+  if (!tbody) return;
+
+  const filtered = expiryData.filter(item => {
+    if (expiryFilter === 'ALL') return true;
+    return item.status === expiryFilter;
   });
 
-  tbody.innerHTML = html;
+  const riskBadge = document.getElementById('expiry-risk-badge');
+  const criticalCount = expiryData.filter(i => i.status === 'expiring_7d' || i.status === 'expired').length;
+  if (riskBadge) {
+    riskBadge.textContent = `${criticalCount} Action Needed`;
+    riskBadge.className = criticalCount > 0 ? 'kpi-badge warning' : 'kpi-badge success';
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--text-muted);">No product batches match the filter.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(item => {
+    let statusClass = 'status-healthy';
+    let statusLabel = 'Healthy';
+    if (item.status === 'expired') { statusClass = 'status-expired'; statusLabel = 'Expired'; }
+    else if (item.status === 'expiring_7d') { statusClass = 'status-expiring-7d'; statusLabel = 'Expiring in \u2264 7 Days'; }
+    else if (item.status === 'expiring_30d') { statusClass = 'status-expiring-30d'; statusLabel = 'Expiring in \u2264 30 Days'; }
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600;">${item.name}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${item.productId}</div>
+        </td>
+        <td style="font-family:var(--font-mono); font-size:0.8rem;">${item.batchNumber}</td>
+        <td style="font-size:0.82rem; font-weight:600;">${item.expiryDate}</td>
+        <td style="font-weight:700; color:${item.daysUntilExpiry < 0 ? 'var(--color-danger)' : (item.daysUntilExpiry <= 7 ? 'var(--color-danger)' : 'var(--text-primary)')};">
+          ${item.daysUntilExpiry < 0 ? 'Overdue' : `${item.daysUntilExpiry} days`}
+        </td>
+        <td style="text-align:right; font-weight:700;">${item.quantityAtRisk}</td>
+        <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+        <td style="font-size:0.82rem; color:var(--text-secondary);">${item.action}</td>
+        <td style="text-align:center;">
+          ${item.suggestedDiscount > 0 ? `
+            <button class="table-btn primary btn-apply-smart-promo" data-prod-id="${item.productId}" data-discount="${item.suggestedDiscount}" data-reason="${item.action}">
+              Apply ${item.suggestedDiscount}% Promo
+            </button>
+          ` : `
+            <span style="font-size:0.78rem; color:var(--text-muted);">Standard Price</span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('.btn-apply-smart-promo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prodId = btn.getAttribute('data-prod-id');
+      const discount = btn.getAttribute('data-discount');
+      const reason = btn.getAttribute('data-reason');
+      openPromotionModal(prodId, discount, reason);
+    });
+  });
 }
 
-// ==========================================
-// 7. Chart.js Visualizations (Populated from DB)
-// ==========================================
-function initAnalyticsCharts() {
-  const ChartLib = window.Chart;
-  if (!ChartLib) return;
+// Demand Forecasting Section Rendering
+function renderForecastSection() {
+  const tbody = document.getElementById('forecast-tbody');
+  if (!tbody) return;
 
-  ChartLib.defaults.font.family = "'Space Mono', monospace";
-  ChartLib.defaults.color = '#000000';
-  ChartLib.defaults.borderColor = '#e0e0e0';
+  const filtered = forecastData.filter(f => {
+    if (forecastFilterClass === 'ALL') return true;
+    return f.classification === forecastFilterClass;
+  });
 
-  // 1. Revenue & Order Volume Trend
-  const ctxRevenue = document.getElementById('revenueTrendChart');
-  if (ctxRevenue) {
-    revenueTrendChart = new ChartLib(ctxRevenue, {
-      type: 'line',
-      data: {
-        labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'],
-        datasets: [
-          {
-            label: 'Revenue ($)',
-            data: [210.50, 480.00, 890.20, 1280.00, 640.80, 920.00, 360.50, 100.50],
-            borderColor: '#000000',
-            backgroundColor: 'rgba(0, 0, 0, 0.08)',
-            borderWidth: 2.5,
-            tension: 0.3,
-            fill: true,
-            pointBackgroundColor: '#000000',
-            pointRadius: 4,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Completed Orders',
-            data: [8, 18, 32, 44, 23, 31, 10, 2],
-            borderColor: '#888888',
-            borderDash: [4, 4],
-            borderWidth: 2,
-            tension: 0.3,
-            pointBackgroundColor: '#888888',
-            pointRadius: 3,
-            yAxisID: 'y1'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: { type: 'linear', position: 'left', ticks: { callback: v => '$' + v } },
-          y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => v + ' ord' } }
-        }
-      }
-    });
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-muted);">No products match this forecast classification.</td></tr>`;
+    return;
   }
 
-  // 2. Category Sales Bar Chart
-  const ctxCategory = document.getElementById('categorySalesChart');
-  if (ctxCategory) {
-    categorySalesChart = new ChartLib(ctxCategory, {
-      type: 'bar',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'Gross Sales ($)',
-            data: [],
-            backgroundColor: '#000000',
-            borderWidth: 1.5,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Units Sold',
-            data: [],
-            backgroundColor: '#bbbbbb',
-            borderWidth: 1.5,
-            yAxisID: 'y1'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: { position: 'left', ticks: { callback: v => '$' + v } },
-          y1: { position: 'right', grid: { drawOnChartArea: false } }
-        }
-      }
-    });
-  }
+  tbody.innerHTML = filtered.map(f => {
+    let badgeClass = 'status-healthy';
+    if (f.classification === 'Critical Stockout Risk' || f.classification === 'Out of Stock') badgeClass = 'status-out-stock';
+    else if (f.classification === 'Low Stock') badgeClass = 'status-low-stock';
+    else if (f.classification === 'Fast Moving') badgeClass = 'status-active';
+    else if (f.classification === 'Slow Moving' || f.classification === 'Dormant Stock') badgeClass = 'status-expiring-30d';
 
-  // 3. Top Products Chart
-  const ctxTopProd = document.getElementById('topProductsChart');
-  if (ctxTopProd) {
-    topProductsChart = new ChartLib(ctxTopProd, {
-      type: 'bar',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Revenue ($)',
-          data: [],
-          backgroundColor: ['#000000', '#222222', '#444444', '#666666', '#888888'],
-          borderWidth: 1.5
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { callback: v => '$' + v } }
-        }
-      }
-    });
-  }
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600;">${f.name}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${f.id}</div>
+        </td>
+        <td style="text-align:right; font-weight:700; color:${f.available === 0 ? 'var(--color-danger)' : 'var(--text-primary)'};">${f.available}</td>
+        <td style="text-align:right; font-weight:600;">${f.soldUnits}</td>
+        <td style="text-align:right; font-weight:600;">${f.avgDailySales} / day</td>
+        <td style="text-align:right; font-weight:700; color:${f.daysUntilStockout <= 7 ? 'var(--color-danger)' : 'var(--text-primary)'};">
+          ${f.daysUntilStockout > 365 ? '> 1 Year' : `${f.daysUntilStockout} days`}
+        </td>
+        <td style="font-size:0.8rem; color:var(--text-muted);">${f.stockoutDate}</td>
+        <td style="text-align:right; color:var(--text-secondary);">${f.targetStock}</td>
+        <td style="text-align:right; font-weight:700; color:${f.suggestedReorderQty > 0 ? 'var(--color-primary)' : 'var(--color-success)'};">
+          ${f.suggestedReorderQty > 0 ? `+${f.suggestedReorderQty}` : '0'}
+        </td>
+        <td><span class="status-pill ${badgeClass}">${f.classification}</span></td>
+        <td style="font-size:0.8rem; color:var(--text-secondary);">${f.recommendationReason}</td>
+        <td style="text-align:center;">
+          ${f.suggestedReorderQty > 0 ? `
+            <button class="table-btn primary btn-forecast-reorder" data-prod-id="${f.id}" data-qty="${f.suggestedReorderQty}">
+              Reorder +${f.suggestedReorderQty}
+            </button>
+          ` : `
+            <span style="font-size:0.78rem; color:var(--text-muted);">Sufficient</span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
 
-  // 4. Traffic Velocity Chart
-  const ctxTraffic = document.getElementById('trafficVelocityChart');
-  if (ctxTraffic) {
-    trafficVelocityChart = new ChartLib(ctxTraffic, {
-      type: 'bar',
-      data: {
-        labels: ['08h', '09h', '10h', '11h', '12h', '13h', '14h', '15h', '16h', '17h', '18h', '19h', '20h', '21h'],
-        datasets: [{
-          label: 'Transactions Completed',
-          data: [12, 24, 38, 45, 62, 58, 48, 30, 28, 42, 59, 64, 35, 14],
-          backgroundColor: '#000000',
-          borderWidth: 1.5
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false
-      }
+  tbody.querySelectorAll('.btn-forecast-reorder').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prodId = btn.getAttribute('data-prod-id');
+      const qty = btn.getAttribute('data-qty');
+      openRestockModal(prodId, qty);
     });
-  }
-
-  updateAnalyticsChartsFromDb();
+  });
 }
 
-function updateAnalyticsChartsFromDb() {
-  if (!dbAnalytics) return;
+// Market Basket Section Rendering
+function renderMarketBasketSection() {
+  if (!basketData) return;
 
-  // Update Category Sales from Database
-  if (categorySalesChart && dbAnalytics.categorySales?.length) {
-    categorySalesChart.data.labels = dbAnalytics.categorySales.map(c => c.category);
-    categorySalesChart.data.datasets[0].data = dbAnalytics.categorySales.map(c => c.revenue);
-    categorySalesChart.data.datasets[1].data = dbAnalytics.categorySales.map(c => c.units);
-    categorySalesChart.update();
+  const datasetBadge = document.getElementById('basket-dataset-badge');
+  if (datasetBadge) {
+    datasetBadge.textContent = basketData.isSimulated
+      ? '✨ Simulated Demo Baskets'
+      : `Production Sales (${basketData.totalEligibleTransactions} Transactions)`;
+    datasetBadge.className = basketData.isSimulated ? 'kpi-badge warning' : 'kpi-badge info';
   }
 
-  // Update Top Products from Database
-  if (topProductsChart && dbAnalytics.topProducts?.length) {
-    topProductsChart.data.labels = dbAnalytics.topProducts.map(p => p.name);
-    topProductsChart.data.datasets[0].data = dbAnalytics.topProducts.map(p => p.revenue);
-    topProductsChart.update();
-  }
-}
-
-function updateAnalyticsFilters() {
-  let filteredRev = dbKPIs?.todaySales ?? 0;
-  let filteredOrders = dbKPIs?.completedOrders ?? 0;
-  let filteredUnits = 0;
-  let filteredProfit = dbKPIs?.grossProfit ?? 0;
-
-  if (analyticsFilter.category !== 'ALL') {
-    const catProds = products.filter(p => p.category === analyticsFilter.category);
-    filteredRev = catProds.reduce((acc, p) => acc + (p.revenue || 0), 0);
-    filteredUnits = catProds.reduce((acc, p) => acc + (p.soldUnits || 0), 0);
-    const catCost = catProds.reduce((acc, p) => acc + (p.cost * (p.soldUnits || 0)), 0);
-    filteredProfit = filteredRev - catCost;
-    filteredOrders = Math.round(filteredUnits / 2.45) || (filteredUnits > 0 ? 1 : 0);
-  } else if (analyticsFilter.productId !== 'ALL') {
-    const p = products.find(x => x.id === analyticsFilter.productId);
-    if (p) {
-      filteredRev = p.revenue || 0;
-      filteredUnits = p.soldUnits || 0;
-      filteredProfit = filteredRev - (p.cost * filteredUnits);
-      filteredOrders = Math.round(filteredUnits / 1.5) || (filteredUnits > 0 ? 1 : 0);
+  // Combos Grid
+  const combosGrid = document.getElementById('market-basket-combos-grid');
+  if (combosGrid) {
+    const combos = basketData.combos || [];
+    if (combos.length === 0) {
+      combosGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; background:#ffffff; border:1px solid var(--border-subtle); padding:24px; border-radius:var(--radius-lg); text-align:center; color:var(--text-muted);">
+          ${basketData.message || 'No completed multi-item transactions found in production database.'}
+        </div>
+      `;
+    } else {
+      combosGrid.innerHTML = combos.map(c => `
+        <div class="combo-card">
+          <span class="combo-badge">Lift: ${c.lift}x</span>
+          <h4>${c.title}</h4>
+          <div class="combo-metrics">
+            <div class="combo-metric">
+              <span class="label">Co-Occurrences</span>
+              <span class="val">${c.transactions}</span>
+            </div>
+            <div class="combo-metric">
+              <span class="label">Confidence</span>
+              <span class="val">${c.confidence}</span>
+            </div>
+            <div class="combo-metric">
+              <span class="label">Affinity</span>
+              <span class="val">${c.lift >= 2.0 ? 'High' : 'Moderate'}</span>
+            </div>
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 12px 0;">
+            ${c.recommendation}
+          </p>
+          <button class="table-btn primary" style="width:100%; text-align:center;">
+            Promote Combo in Smart Cart
+          </button>
+        </div>
+      `).join('');
     }
-  } else {
-    products.forEach(p => {
-      filteredUnits += (p.soldUnits || 0);
-    });
   }
 
-  const marginPct = filteredRev > 0 ? ((filteredProfit / filteredRev) * 100).toFixed(1) + '%' : '0.0%';
-  const aov = filteredOrders > 0 ? (filteredRev / filteredOrders).toFixed(2) : '0.00';
+  // Association Rules Table
+  const tbody = document.getElementById('basket-tbody');
+  if (!tbody) return;
 
-  const revEl = document.getElementById('metric-filtered-revenue');
-  const ordEl = document.getElementById('metric-filtered-orders');
-  const unitEl = document.getElementById('metric-filtered-units');
-  const aovEl = document.getElementById('metric-filtered-aov');
-  const profEl = document.getElementById('metric-filtered-profit');
-  const mrgEl = document.getElementById('metric-filtered-margin');
+  const pairs = basketData.pairs || [];
+  if (pairs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-muted);">No co-occurrence pairs detected yet.</td></tr>`;
+    return;
+  }
 
-  if (revEl) revEl.textContent = formatCurrency(filteredRev);
-  if (ordEl) ordEl.textContent = String(filteredOrders);
-  if (unitEl) unitEl.textContent = `${filteredUnits} UNITS`;
-  if (aovEl) aovEl.textContent = `$${aov} / ORDER`;
-  if (profEl) profEl.textContent = formatCurrency(filteredProfit);
-  if (mrgEl) mrgEl.textContent = marginPct;
+  tbody.innerHTML = pairs.map(p => `
+    <tr>
+      <td>
+        <div style="font-weight:600;">${p.productA.name}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${p.productA.category}</div>
+      </td>
+      <td>
+        <div style="font-weight:600;">${p.productB.name}</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${p.productB.category}</div>
+      </td>
+      <td style="text-align:right; font-weight:700;">${p.coOccurrenceCount}</td>
+      <td style="text-align:right; font-family:var(--font-mono);">${(p.support * 100).toFixed(1)}%</td>
+      <td style="text-align:right; font-family:var(--font-mono); font-weight:600;">${(p.confidenceAtoB * 100).toFixed(1)}%</td>
+      <td style="text-align:right; font-weight:800; color:var(--color-purple-dark);">${p.lift}x</td>
+      <td style="font-size:0.82rem; color:var(--text-secondary);">${p.suggestedAction}</td>
+    </tr>
+  `).join('');
 }
 
 // ==========================================
-// 8. Modals, Actions & Database Handlers
+// 5. Chart.js Data Visualizations
 // ==========================================
-function openModal(modalId) {
-  const el = document.getElementById(modalId);
+function renderAllCharts() {
+  if (!analyticsData) return;
+
+  const primaryColor = '#2563eb';
+  const greenColor = '#10b981';
+  const amberColor = '#f59e0b';
+  const purpleColor = '#8b5cf6';
+  const roseColor = '#ef4444';
+
+  // Helper to destroy and rebuild charts cleanly
+  function createChart(canvasId, type, data, options = {}) {
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return;
+
+    if (charts[canvasId]) {
+      charts[canvasId].destroy();
+    }
+
+    charts[canvasId] = new Chart(ctx, {
+      type,
+      data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: options.showLegend ?? false,
+            labels: { font: { family: 'Inter', size: 11 }, boxWidth: 12 }
+          },
+          tooltip: {
+            backgroundColor: '#0f172a',
+            padding: 10,
+            cornerRadius: 8,
+            titleFont: { family: 'Inter', size: 12, weight: 'bold' },
+            bodyFont: { family: 'Inter', size: 11 }
+          }
+        },
+        scales: options.scales || {
+          x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 10 } } },
+          y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 10 } } }
+        },
+        ...options.extra
+      }
+    });
+  }
+
+  const timeSeries = analyticsData.timeSeries || [];
+  const unitSeries = analyticsData.unitSeries || [];
+  const aovSeries = analyticsData.aovSeries || [];
+  const topProducts = analyticsData.topProducts || [];
+  const catSales = analyticsData.categorySales || [];
+  const stockDist = analyticsData.stockDistribution || [];
+  const movements = analyticsData.inventoryMovements || [];
+
+  // Chart 1: Daily Revenue
+  createChart('chart-daily-revenue', 'line', {
+    labels: timeSeries.map(t => t.bucket ? t.bucket.slice(0, 10) : ''),
+    datasets: [{
+      label: 'Revenue ($)',
+      data: timeSeries.map(t => t.revenue),
+      borderColor: primaryColor,
+      backgroundColor: 'rgba(37, 99, 235, 0.08)',
+      fill: true,
+      tension: 0.35,
+      borderWidth: 2,
+      pointRadius: 3
+    }]
+  });
+
+  // Chart 2: Units Sold Over Time
+  createChart('chart-units-sold', 'bar', {
+    labels: unitSeries.map(u => u.bucket ? u.bucket.slice(0, 10) : ''),
+    datasets: [{
+      label: 'Units Sold',
+      data: unitSeries.map(u => u.units),
+      backgroundColor: '#60a5fa',
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 3: Revenue by Product
+  createChart('chart-revenue-by-prod', 'bar', {
+    labels: topProducts.map(p => p.name),
+    datasets: [{
+      label: 'Revenue ($)',
+      data: topProducts.map(p => p.revenue),
+      backgroundColor: purpleColor,
+      borderRadius: 4
+    }]
+  }, { extra: { indexAxis: 'y' } });
+
+  // Chart 4: Best-Selling Products (Units)
+  createChart('chart-best-sellers', 'bar', {
+    labels: topProducts.map(p => p.name),
+    datasets: [{
+      label: 'Units Purchased',
+      data: topProducts.map(p => p.units),
+      backgroundColor: greenColor,
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 5: Category Breakdown
+  createChart('chart-sales-by-cat', 'doughnut', {
+    labels: catSales.map(c => c.category),
+    datasets: [{
+      data: catSales.map(c => c.revenue),
+      backgroundColor: [primaryColor, greenColor, amberColor, purpleColor, roseColor],
+      borderWidth: 0
+    }]
+  }, { showLegend: true, scales: { x: { display: false }, y: { display: false } } });
+
+  // Chart 6: AOV Trend
+  createChart('chart-aov-trend', 'line', {
+    labels: aovSeries.map(a => a.bucket ? a.bucket.slice(0, 10) : ''),
+    datasets: [{
+      label: 'AOV ($)',
+      data: aovSeries.map(a => a.aov),
+      borderColor: amberColor,
+      borderWidth: 2,
+      tension: 0.3
+    }]
+  });
+
+  // Chart 7: Current Stock by Product
+  createChart('chart-stock-by-prod', 'bar', {
+    labels: stockDist.map(s => s.name),
+    datasets: [{
+      label: 'Available Stock',
+      data: stockDist.map(s => s.available),
+      backgroundColor: '#3b82f6',
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 8: Inventory Triad (Grouped Multi-bar)
+  createChart('chart-inventory-triad', 'bar', {
+    labels: stockDist.map(s => s.name),
+    datasets: [
+      { label: 'Physical On-Hand', data: stockDist.map(s => s.onHand), backgroundColor: '#94a3b8', borderRadius: 3 },
+      { label: 'Reserved in Carts', data: stockDist.map(s => s.reserved), backgroundColor: amberColor, borderRadius: 3 },
+      { label: 'Net Available', data: stockDist.map(s => s.available), backgroundColor: greenColor, borderRadius: 3 }
+    ]
+  }, { showLegend: true });
+
+  // Chart 9: Stock Health Distribution
+  const inStockCount = stockDist.filter(s => s.available > 10).length;
+  const lowStockCount = stockDist.filter(s => s.available > 0 && s.available <= 10).length;
+  const outOfStockCount = stockDist.filter(s => s.available === 0).length;
+
+  createChart('chart-stock-health', 'doughnut', {
+    labels: ['Healthy Stock', 'Low Stock', 'Out of Stock'],
+    datasets: [{
+      data: [inStockCount, lowStockCount, outOfStockCount],
+      backgroundColor: [greenColor, amberColor, roseColor],
+      borderWidth: 0
+    }]
+  }, { showLegend: true, scales: { x: { display: false }, y: { display: false } } });
+
+  // Chart 10: Inventory Movements by Action
+  createChart('chart-movements-by-action', 'bar', {
+    labels: movements.map(m => m.action),
+    datasets: [{
+      label: 'Action Volume',
+      data: movements.map(m => m.count),
+      backgroundColor: '#818cf8',
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 11: Stockout Risk / Days of Supply
+  const forecastItems = (forecastData.length > 0 ? forecastData : calculateDemandForecast(products, 30))
+    .slice()
+    .sort((a, b) => a.daysUntilStockout - b.daysUntilStockout)
+    .slice(0, 8);
+
+  createChart('chart-days-of-supply', 'bar', {
+    labels: forecastItems.map(f => f.name),
+    datasets: [{
+      label: 'Days of Supply Remaining',
+      data: forecastItems.map(f => Math.min(f.daysUntilStockout, 90)),
+      backgroundColor: forecastItems.map(f => f.daysUntilStockout <= 7 ? roseColor : (f.daysUntilStockout <= 20 ? amberColor : greenColor)),
+      borderRadius: 4
+    }]
+  }, { extra: { indexAxis: 'y' } });
+
+  // Chart 12: Suggested Reorder Quantities
+  const reorderItems = forecastItems.filter(f => f.suggestedReorderQty > 0);
+  createChart('chart-reorder-quantities', 'bar', {
+    labels: reorderItems.map(f => f.name),
+    datasets: [{
+      label: 'Recommended Units to Reorder',
+      data: reorderItems.map(f => f.suggestedReorderQty),
+      backgroundColor: primaryColor,
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 13: Expiry Status
+  const expStatusData = analyticsData.expiryStatusChart || [
+    { label: 'Healthy (>30d)', count: 5 },
+    { label: 'Expiring in 30d', count: 2 },
+    { label: 'Expiring in 7d', count: 1 },
+    { label: 'Expired', count: 0 }
+  ];
+
+  createChart('chart-expiry-status', 'doughnut', {
+    labels: expStatusData.map(e => e.label),
+    datasets: [{
+      data: expStatusData.map(e => e.count),
+      backgroundColor: [greenColor, amberColor, roseColor, '#64748b'],
+      borderWidth: 0
+    }]
+  }, { showLegend: true, scales: { x: { display: false }, y: { display: false } } });
+
+  // Chart 14: Quantity at Risk
+  createChart('chart-qty-at-risk', 'bar', {
+    labels: ['Cold Brew Coffee', 'Granola Bar', 'Protein Bar', 'Trail Mix'],
+    datasets: [{
+      label: 'Units at Risk',
+      data: [14, 22, 18, 5],
+      backgroundColor: amberColor,
+      borderRadius: 4
+    }]
+  });
+
+  // Chart 16: Top Paired Products
+  const pairedData = analyticsData.basketPairs || (basketData?.pairs || []).slice(0, 5);
+  createChart('chart-paired-products', 'bar', {
+    labels: pairedData.map(p => `${p.productA.name} + ${p.productB.name}`),
+    datasets: [{
+      label: 'Co-Purchases',
+      data: pairedData.map(p => p.coOccurrenceCount),
+      backgroundColor: purpleColor,
+      borderRadius: 4
+    }]
+  }, { extra: { indexAxis: 'y' } });
+
+  // Chart 17: Lift Strength
+  createChart('chart-lift-strength', 'bar', {
+    labels: pairedData.map(p => `${p.productA.name.slice(0, 10)} & ${p.productB.name.slice(0, 10)}`),
+    datasets: [{
+      label: 'Lift Multiplier (x)',
+      data: pairedData.map(p => p.lift),
+      backgroundColor: '#a855f7',
+      borderRadius: 4
+    }]
+  });
+}
+
+// ==========================================
+// 6. Modal & Drawer Controllers
+// ==========================================
+function openModal(id) {
+  const el = document.getElementById(id);
   if (el) el.classList.remove('hidden');
 }
 
-function closeModal(modalId) {
-  const el = document.getElementById(modalId);
+function closeModal(id) {
+  const el = document.getElementById(id);
   if (el) el.classList.add('hidden');
 }
 
-function showToast(msg, type = 'success') {
-  const container = document.getElementById('admin-toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `admin-toast ${type}`;
-  toast.innerHTML = `<span>■</span> <span>${msg}</span>`;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
-
-function populateProductDropdowns() {
-  const selects = [
-    document.getElementById('filter-product'),
-    document.getElementById('count-product-select'),
-    document.getElementById('restock-product-select'),
-    document.getElementById('thresh-product-select'),
-    document.getElementById('movement-product-filter')
-  ];
-
-  selects.forEach(sel => {
-    if (!sel) return;
-    const isFilter = sel.id === 'filter-product' || sel.id === 'movement-product-filter';
-    const currentVal = sel.value;
-
-    let html = isFilter ? '<option value="ALL">ALL PRODUCTS</option>' : '';
-    products.forEach(p => {
-      html += `<option value="${p.id}">${p.name} (${p.id} // ${p.rfid})</option>`;
+function setupModalClosers() {
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modalId = btn.getAttribute('data-close-modal');
+      closeModal(modalId);
     });
+  });
 
-    sel.innerHTML = html;
-    if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
-      sel.value = currentVal;
-    }
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.classList.add('hidden');
+      }
+    });
   });
 }
 
-function openCycleCountModal(productId) {
-  populateProductDropdowns();
+function populateProductSelects() {
+  const selects = [
+    'count-product-select',
+    'restock-product-select',
+    'thresh-product-select',
+    'promo-product-select'
+  ];
+
+  selects.forEach(selId => {
+    const el = document.getElementById(selId);
+    if (!el) return;
+    el.innerHTML = products.map(p => `
+      <option value="${p.id}">${p.name} (${p.id}) &mdash; Available: ${p.available}</option>
+    `).join('');
+  });
+}
+
+// Restock Modal
+function openRestockModal(productId = null, suggestedQty = null) {
+  populateProductSelects();
+  const select = document.getElementById('restock-product-select');
+  if (select && productId) {
+    select.value = productId;
+  }
+  const qtyInput = document.getElementById('restock-qty');
+  if (qtyInput) {
+    qtyInput.value = suggestedQty ? parseInt(suggestedQty, 10) : '';
+  }
+  openModal('modal-restock');
+}
+
+// Physical Count Modal
+function openCycleCountModal(productId = null) {
+  populateProductSelects();
   const select = document.getElementById('count-product-select');
-  if (productId && select) select.value = productId;
+  if (select && productId) {
+    select.value = productId;
+  }
   updateCycleCountPreview();
   openModal('modal-cycle-count');
 }
 
 function updateCycleCountPreview() {
-  const prodId = document.getElementById('count-product-select')?.value;
-  const prod = products.find(p => p.id === prodId) || products[0];
+  const select = document.getElementById('count-product-select');
+  if (!select) return;
+  const prod = products.find(p => p.id === select.value);
   if (!prod) return;
 
-  const sysOnHandEl = document.getElementById('count-sys-onhand');
-  const sysReservedEl = document.getElementById('count-sys-reserved');
-  const sysAvailableEl = document.getElementById('count-sys-available');
-  const inputEl = document.getElementById('count-physical-input');
+  document.getElementById('count-sys-onhand').textContent = prod.onHand;
+  document.getElementById('count-sys-reserved').textContent = prod.reserved;
+  document.getElementById('count-sys-available').textContent = prod.available;
 
-  if (sysOnHandEl) sysOnHandEl.textContent = String(prod.onHand);
-  if (sysReservedEl) sysReservedEl.textContent = String(prod.reserved);
-  if (sysAvailableEl) sysAvailableEl.textContent = String(getAvailableStock(prod));
-
-  const counted = parseInt(inputEl.value, 10);
+  const countedInput = document.getElementById('count-physical-input');
+  const counted = parseInt(countedInput.value, 10);
   const badge = document.getElementById('count-discrepancy-badge');
   const sub = document.getElementById('count-discrepancy-sub');
 
-  if (isNaN(counted)) {
-    badge.className = 'variance-neutral';
-    badge.textContent = '0 UNITS';
-    sub.textContent = 'Enter physical count to calculate variance against database ledger';
+  if (!isNaN(counted)) {
+    const delta = counted - prod.onHand;
+    badge.textContent = `${delta > 0 ? `+${delta}` : delta} Units`;
+    badge.className = delta === 0 ? 'kpi-badge info' : (delta > 0 ? 'kpi-badge success' : 'kpi-badge warning');
+    sub.textContent = delta === 0 ? 'Physical count matches database exactly' : (delta > 0 ? 'Surplus stock detected on shelf' : 'Physical shortage relative to system ledger');
   } else {
-    const diff = counted - prod.onHand;
-    if (diff === 0) {
-      badge.className = 'variance-neutral';
-      badge.textContent = 'PERFECT MATCH (0 UNITS)';
-      sub.textContent = 'Physical inventory exactly matches digital database ledger.';
-    } else if (diff > 0) {
-      badge.className = 'variance-gain';
-      badge.textContent = `+${diff} UNITS (SURPLUS)`;
-      sub.textContent = `Physical count is HIGHER than database. Database will be incremented.`;
-    } else {
-      badge.className = 'variance-loss';
-      badge.textContent = `${diff} UNITS (DEFICIT)`;
-      sub.textContent = `Physical count is LOWER than database. Database shrinkage will be recorded.`;
-    }
+    badge.textContent = '0 Units';
+    sub.textContent = 'Enter counted units on shelf';
   }
 }
 
-function openRestockModal(productId) {
-  populateProductDropdowns();
-  const select = document.getElementById('restock-product-select');
-  if (productId && select) select.value = productId;
-  openModal('modal-restock');
-}
-
-function openThresholdsModal(productId) {
-  populateProductDropdowns();
+// Reorder Thresholds Modal
+function openThresholdsModal(productId = null) {
+  populateProductSelects();
   const select = document.getElementById('thresh-product-select');
-  if (productId && select) select.value = productId;
-  updateThresholdFormFields();
+  if (select && productId) {
+    select.value = productId;
+  }
+  loadProductThresholds();
   openModal('modal-thresholds');
 }
 
-function updateThresholdFormFields() {
-  const prodId = document.getElementById('thresh-product-select')?.value;
-  const prod = products.find(p => p.id === prodId);
+function loadProductThresholds() {
+  const select = document.getElementById('thresh-product-select');
+  if (!select) return;
+  const prod = products.find(p => p.id === select.value);
   if (!prod) return;
 
-  const reorderEl = document.getElementById('thresh-reorder');
-  const safetyEl = document.getElementById('thresh-safety');
-  const supplierEl = document.getElementById('thresh-supplier');
-  const leadEl = document.getElementById('thresh-leadtime');
-
-  if (reorderEl) reorderEl.value = prod.reorderLevel;
-  if (safetyEl) safetyEl.value = prod.safetyStock;
-  if (supplierEl) supplierEl.value = prod.supplier;
-  if (leadEl) leadEl.value = prod.leadTimeDays;
+  document.getElementById('thresh-reorder').value = prod.reorderLevel;
+  document.getElementById('thresh-safety').value = prod.safetyStock;
+  document.getElementById('thresh-leadtime').value = prod.leadTimeDays;
+  document.getElementById('thresh-target-coverage').value = prod.targetCoverageDays || 14;
+  document.getElementById('thresh-supplier').value = prod.supplier || 'Standard Supplier';
 }
 
-function openProductDetail(productId) {
+// Product 360 Drawer
+function openProduct360(productId) {
   const prod = products.find(p => p.id === productId);
   if (!prod) return;
 
-  const available = getAvailableStock(prod);
-  const status = getProductStatus(prod);
-  const unitProfit = prod.price - prod.cost;
-  const marginPct = prod.price > 0 ? ((unitProfit / prod.price) * 100).toFixed(1) : '0.0';
-
   document.getElementById('detail-product-name').textContent = prod.name;
   document.getElementById('detail-product-id').textContent = prod.id;
-  document.getElementById('detail-product-rfid').textContent = prod.rfid;
+  document.getElementById('detail-product-rfid').textContent = prod.rfid || 'N/A';
   document.getElementById('detail-product-cat').textContent = prod.category;
   document.getElementById('detail-product-supplier').textContent = prod.supplier;
 
-  const statusEl = document.getElementById('detail-product-status');
-  statusEl.textContent = status.toUpperCase();
-  statusEl.className = 'status-pill ' + (status === 'Healthy' ? 'status-healthy' : (status === 'Low stock' ? 'status-low' : 'status-out'));
-
-  document.getElementById('detail-onhand').textContent = String(prod.onHand);
-  document.getElementById('detail-reserved').textContent = String(prod.reserved);
-  document.getElementById('detail-available').textContent = String(available);
+  document.getElementById('detail-onhand').textContent = prod.onHand;
+  document.getElementById('detail-reserved').textContent = prod.reserved;
+  document.getElementById('detail-available').textContent = prod.available;
 
   document.getElementById('detail-cost').textContent = formatCurrency(prod.cost);
   document.getElementById('detail-price').textContent = formatCurrency(prod.price);
-  document.getElementById('detail-unit-profit').textContent = formatCurrency(unitProfit);
-  document.getElementById('detail-margin').textContent = marginPct + '%';
-  document.getElementById('detail-asset-val').textContent = formatCurrency(prod.onHand * prod.price);
-  document.getElementById('detail-asset-cost').textContent = formatCurrency(prod.onHand * prod.cost);
+  const margin = prod.price > 0 ? (((prod.price - prod.cost) / prod.price) * 100).toFixed(1) : 0;
+  document.getElementById('detail-margin').textContent = `${margin}%`;
 
-  document.getElementById('detail-reorder').textContent = `${prod.reorderLevel} Units`;
-  document.getElementById('detail-safety').textContent = `${prod.safetyStock} Units`;
-  document.getElementById('detail-leadtime').textContent = `${prod.leadTimeDays} Days`;
-  document.getElementById('detail-last-restocked').textContent = prod.lastRestocked;
+  // Status pill
+  const statusEl = document.getElementById('detail-product-status');
+  statusEl.textContent = prod.status;
+  statusEl.className = prod.status === 'In Stock' ? 'status-pill status-healthy' : 'status-pill status-low-stock';
 
-  const miniTbody = document.getElementById('detail-movements-tbody');
-  const prodMovements = movements.filter(m => m.productId === prod.id);
-
-  if (miniTbody) {
+  // Filter movements for this product
+  const prodMovements = movements.filter(m => m.productId === productId);
+  const movTbody = document.getElementById('detail-movements-tbody');
+  if (movTbody) {
     if (prodMovements.length === 0) {
-      miniTbody.innerHTML = '<tr><td colspan="5" class="text-center">No recorded movements in database</td></tr>';
+      movTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--text-muted);">No movement ledger records for this item.</td></tr>`;
     } else {
-      miniTbody.innerHTML = prodMovements.map(m => `
+      movTbody.innerHTML = prodMovements.slice(0, 10).map(m => `
         <tr>
-          <td>${m.timestamp.split(' ')[0]}</td>
-          <td><span class="movement-badge">${m.action}</span></td>
-          <td class="${m.delta > 0 ? 'delta-positive' : 'delta-negative'}">${m.delta > 0 ? '+' : ''}${m.delta}</td>
-          <td>${m.afterQty}</td>
-          <td>${m.ref}</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${m.timestamp}</td>
+          <td><span class="status-pill status-active" style="font-size:0.7rem;">${m.action}</span></td>
+          <td style="text-align:right; font-weight:700; color:${m.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${m.delta > 0 ? `+${m.delta}` : m.delta}</td>
+          <td style="text-align:right; font-weight:600;">${m.afterQty}</td>
+          <td style="font-family:var(--font-mono); font-size:0.75rem;">${m.ref}</td>
         </tr>
       `).join('');
     }
   }
 
-  const editBtn = document.getElementById('btn-detail-edit');
-  const countBtn = document.getElementById('btn-detail-count');
-  const restockBtn = document.getElementById('btn-detail-restock');
-
-  if (editBtn) editBtn.onclick = () => { closeModal('modal-product-detail'); openAddProductModal(prod); };
-  if (countBtn) countBtn.onclick = () => { closeModal('modal-product-detail'); openCycleCountModal(prod.id); };
-  if (restockBtn) restockBtn.onclick = () => { closeModal('modal-product-detail'); openRestockModal(prod.id); };
+  // Attach buttons inside drawer
+  document.getElementById('btn-detail-edit').onclick = () => {
+    closeModal('modal-product-detail');
+    openEditProductModal(productId);
+  };
+  document.getElementById('btn-detail-count').onclick = () => {
+    closeModal('modal-product-detail');
+    openCycleCountModal(productId);
+  };
+  document.getElementById('btn-detail-restock').onclick = () => {
+    closeModal('modal-product-detail');
+    openRestockModal(productId);
+  };
 
   openModal('modal-product-detail');
 }
 
-function openAddProductModal(editProduct = null) {
-  const form = document.getElementById('form-product');
-  const title = document.getElementById('modal-product-title');
-  const isEdit = document.getElementById('prod-form-is-edit');
+// Add / Edit Product Modals
+function openAddProductModal() {
+  document.getElementById('modal-product-title').textContent = 'Add New Product';
+  document.getElementById('prod-form-is-edit').value = 'false';
+  document.getElementById('prod-id').readOnly = false;
+  document.getElementById('form-product').reset();
+  openModal('modal-product');
+}
 
-  form.reset();
-  if (editProduct) {
-    title.textContent = 'EDIT PRODUCT DETAILS';
-    isEdit.value = 'true';
-    document.getElementById('prod-id').value = editProduct.id;
-    document.getElementById('prod-id').readOnly = true;
-    document.getElementById('prod-name').value = editProduct.name;
-    document.getElementById('prod-rfid').value = editProduct.rfid;
-    document.getElementById('prod-category').value = editProduct.category;
-    document.getElementById('prod-supplier').value = editProduct.supplier;
-    document.getElementById('prod-cost').value = editProduct.cost;
-    document.getElementById('prod-price').value = editProduct.price;
-    document.getElementById('prod-reorder').value = editProduct.reorderLevel;
-    document.getElementById('prod-safety').value = editProduct.safetyStock;
-    document.getElementById('prod-lead-time').value = editProduct.leadTimeDays;
-    document.getElementById('prod-onhand').value = editProduct.onHand;
-  } else {
-    title.textContent = 'ADD NEW PRODUCT TO DATABASE';
-    isEdit.value = 'false';
-    document.getElementById('prod-id').readOnly = false;
-    document.getElementById('prod-id').value = `PROD-${String(products.length + 1).padStart(3, '0')}`;
-    document.getElementById('prod-rfid').value = `RF-${Math.floor(100000 + Math.random() * 900000)}`;
-  }
+function openEditProductModal(productId) {
+  const prod = products.find(p => p.id === productId);
+  if (!prod) return;
+
+  document.getElementById('modal-product-title').textContent = `Edit Product: ${prod.name}`;
+  document.getElementById('prod-form-is-edit').value = 'true';
+
+  const idInput = document.getElementById('prod-id');
+  idInput.value = prod.id;
+  idInput.readOnly = true;
+
+  document.getElementById('prod-name').value = prod.name;
+  document.getElementById('prod-rfid').value = prod.rfid;
+  document.getElementById('prod-category').value = prod.category;
+  document.getElementById('prod-supplier').value = prod.supplier;
+  document.getElementById('prod-cost').value = prod.cost;
+  document.getElementById('prod-price').value = prod.price;
+  document.getElementById('prod-reorder').value = prod.reorderLevel;
+  document.getElementById('prod-safety').value = prod.safetyStock;
+  document.getElementById('prod-lead-time').value = prod.leadTimeDays;
+  document.getElementById('prod-target-coverage').value = prod.targetCoverageDays || 14;
+  document.getElementById('prod-onhand').value = prod.onHand;
+  document.getElementById('prod-expiry').value = prod.expiryDate || '';
+  document.getElementById('prod-batch').value = prod.batchNumber || '';
 
   openModal('modal-product');
 }
 
+// Session Items Modal
+function openSessionItemsModal(session) {
+  document.getElementById('session-modal-title').textContent = `Cart Session: ${session.session_id} (${session.cart_id})`;
+  const tbody = document.getElementById('session-items-tbody');
+  const items = session.items || [];
+
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">Cart is empty (0 items).</td></tr>`;
+  } else {
+    tbody.innerHTML = items.map(item => `
+      <tr>
+        <td style="font-weight:600;">${item.name || item.product_id}</td>
+        <td><span class="status-pill status-active">${item.category || 'General'}</span></td>
+        <td style="text-align:right; font-weight:700;">${item.quantity}</td>
+        <td style="text-align:right;">${formatCurrency(item.unit_price_at_addition)}</td>
+        <td style="text-align:right; font-weight:700;">${formatCurrency(item.subtotal)}</td>
+      </tr>
+    `).join('');
+  }
+  openModal('modal-session-items');
+}
+
+// Sale Receipt Modal
+function openSaleReceiptModal(sale) {
+  document.getElementById('sale-modal-title').textContent = `Receipt for Sale: ${sale.sale_id}`;
+  const tbody = document.getElementById('sale-detail-items-tbody');
+  const items = sale.lineItems || [];
+
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No line item records.</td></tr>`;
+  } else {
+    tbody.innerHTML = items.map(item => `
+      <tr>
+        <td style="font-weight:600;">${item.name || item.product_id}</td>
+        <td><span class="status-pill status-active">${item.category || 'General'}</span></td>
+        <td style="text-align:right; font-weight:700;">${item.quantity}</td>
+        <td style="text-align:right;">${formatCurrency(item.unit_price)}</td>
+        <td style="text-align:right; font-weight:700;">${formatCurrency(item.line_subtotal)}</td>
+      </tr>
+    `).join('');
+  }
+  openModal('modal-sale-receipt');
+}
+
+// Smart Promotion Modal
+function openPromotionModal(productId = null, discount = 15, reason = '') {
+  populateProductSelects();
+  const select = document.getElementById('promo-product-select');
+  if (select && productId) {
+    select.value = productId;
+  }
+  document.getElementById('promo-discount-input').value = discount;
+  document.getElementById('promo-reason-input').value = reason || 'Clearance discount for approaching expiry';
+  openModal('modal-promotion');
+}
+
 // ==========================================
-// 9. Event Listeners & Database Form Handlers
+// 7. Form Handlers
 // ==========================================
-function setupEventListeners() {
-  setInterval(updateHUDClock, 1000);
-  updateHUDClock();
-  setupLogout();
+function setupForms() {
+  // Product Save (Add or Edit)
+  const prodForm = document.getElementById('form-product');
+  if (prodForm) {
+    prodForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const isEdit = document.getElementById('prod-form-is-edit').value === 'true';
+      const prodId = document.getElementById('prod-id').value.trim();
 
-  // Polling for live database updates every 6 seconds
-  setInterval(() => {
-    loadDashboardData(true);
-  }, 6000);
+      const payload = {
+        id: prodId,
+        name: document.getElementById('prod-name').value.trim(),
+        rfid: document.getElementById('prod-rfid').value.trim(),
+        category: document.getElementById('prod-category').value,
+        supplier: document.getElementById('prod-supplier').value.trim(),
+        cost: parseFloat(document.getElementById('prod-cost').value) || 0,
+        price: parseFloat(document.getElementById('prod-price').value) || 0,
+        reorderLevel: parseInt(document.getElementById('prod-reorder').value, 10) || 10,
+        safetyStock: parseInt(document.getElementById('prod-safety').value, 10) || 5,
+        leadTimeDays: parseInt(document.getElementById('prod-lead-time').value, 10) || 3,
+        targetCoverageDays: parseInt(document.getElementById('prod-target-coverage').value, 10) || 14,
+        onHand: parseInt(document.getElementById('prod-onhand').value, 10) || 0,
+        expiryDate: document.getElementById('prod-expiry').value || null,
+        batchNumber: document.getElementById('prod-batch').value.trim() || null
+      };
 
-  // Tab Navigation
-  const tabs = document.querySelectorAll('#admin-top-nav .nav-tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+      try {
+        const method = isEdit ? 'PUT' : 'POST';
+        const url = isEdit ? `${API_BASE}/admin/products/${prodId}` : `${API_BASE}/admin/products`;
 
-      const target = tab.dataset.tab;
-      document.querySelectorAll('.admin-tab-view').forEach(view => {
-        view.classList.remove('active');
-      });
+        const res = await fetchWithAuth(url, {
+          method,
+          body: JSON.stringify(payload)
+        });
 
-      if (target === 'analytics') {
-        document.getElementById('view-analytics').classList.add('active');
-      } else if (target === 'inventory') {
-        document.getElementById('view-inventory').classList.add('active');
-        renderInventoryTable();
-      } else if (target === 'movements') {
-        document.getElementById('view-movements').classList.add('active');
-        renderMovementsTable();
-      } else if (target === 'sessions') {
-        document.getElementById('view-sessions').classList.add('active');
-        loadSessionsData();
-      } else if (target === 'sales') {
-        document.getElementById('view-sales').classList.add('active');
-        loadSalesData();
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Product ${isEdit ? 'updated' : 'registered'} successfully`, 'success');
+          closeModal('modal-product');
+          refreshAllData();
+        } else {
+          showToast(data.error || 'Failed to save product', 'error');
+        }
+      } catch (err) {
+        showToast('Server error saving product', 'error');
       }
     });
+  }
+
+  // Restock Form
+  const restockForm = document.getElementById('form-restock');
+  if (restockForm) {
+    // Mode tabs
+    const restockTab = document.getElementById('mode-tab-restock');
+    const damagedTab = document.getElementById('mode-tab-damaged');
+    const incomingFields = document.getElementById('restock-fields-incoming');
+    const damagedFields = document.getElementById('restock-fields-damaged');
+    const modeInput = document.getElementById('restock-mode');
+    const qtyLabel = document.getElementById('restock-qty-label');
+    const submitBtn = document.getElementById('btn-submit-restock');
+
+    restockTab.addEventListener('click', () => {
+      modeInput.value = 'restock';
+      restockTab.className = 'btn-primary';
+      damagedTab.className = 'btn-secondary';
+      incomingFields.classList.remove('hidden');
+      damagedFields.classList.add('hidden');
+      qtyLabel.textContent = 'Quantity Received (Units) *';
+      submitBtn.textContent = 'Confirm Inbound Stock';
+    });
+
+    damagedTab.addEventListener('click', () => {
+      modeInput.value = 'damaged';
+      damagedTab.className = 'btn-primary';
+      restockTab.className = 'btn-secondary';
+      incomingFields.classList.add('hidden');
+      damagedFields.classList.remove('hidden');
+      qtyLabel.textContent = 'Quantity to Write-Off (Units) *';
+      submitBtn.textContent = 'Write-Off Damaged Stock';
+    });
+
+    restockForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mode = modeInput.value;
+      const productId = document.getElementById('restock-product-select').value;
+      const quantity = parseInt(document.getElementById('restock-qty').value, 10);
+      const poNumber = document.getElementById('restock-po')?.value.trim();
+      const batchNumber = document.getElementById('restock-batch')?.value.trim();
+      const expiryDate = document.getElementById('restock-expiry')?.value;
+      const damageReason = document.getElementById('damage-reason')?.value;
+      const notes = document.getElementById('restock-notes').value.trim();
+
+      const payload = {
+        productId,
+        type: mode === 'damaged' ? 'DAMAGE_WRITEOFF' : 'RESTOCK',
+        quantity,
+        poNumber: poNumber || (mode === 'damaged' ? 'DMG-WRITEOFF' : 'PO-DIRECT'),
+        batchNumber: batchNumber || null,
+        expiryDate: expiryDate || null,
+        notes: notes || (mode === 'damaged' ? damageReason : 'Inbound shelf restock verified')
+      };
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE}/admin/restock`, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Stock updated: ${data.action} ${data.delta > 0 ? `+${data.delta}` : data.delta} units`, 'success');
+          closeModal('modal-restock');
+          refreshAllData();
+        } else {
+          showToast(data.error || 'Failed to update stock', 'error');
+        }
+      } catch (err) {
+        showToast('Server error updating stock', 'error');
+      }
+    });
+  }
+
+  // Physical Count Form
+  const countForm = document.getElementById('form-cycle-count');
+  if (countForm) {
+    document.getElementById('count-product-select')?.addEventListener('change', updateCycleCountPreview);
+    document.getElementById('count-physical-input')?.addEventListener('input', updateCycleCountPreview);
+
+    countForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('count-product-select').value;
+      const countedQty = parseInt(document.getElementById('count-physical-input').value, 10);
+      const reason = document.getElementById('count-reason').value;
+      const notes = document.getElementById('count-notes').value.trim();
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE}/admin/cycle-count`, {
+          method: 'POST',
+          body: JSON.stringify({ productId, countedQty, reason, notes })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Physical count audit committed (delta: ${data.delta})`, 'success');
+          closeModal('modal-cycle-count');
+          refreshAllData();
+        } else {
+          showToast(data.error || 'Failed to record count', 'error');
+        }
+      } catch (err) {
+        showToast('Server error recording count', 'error');
+      }
+    });
+  }
+
+  // Reorder Thresholds Form
+  const threshForm = document.getElementById('form-thresholds');
+  if (threshForm) {
+    document.getElementById('thresh-product-select')?.addEventListener('change', loadProductThresholds);
+
+    threshForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('thresh-product-select').value;
+      const reorderLevel = parseInt(document.getElementById('thresh-reorder').value, 10);
+      const safetyStock = parseInt(document.getElementById('thresh-safety').value, 10);
+      const leadTimeDays = parseInt(document.getElementById('thresh-leadtime').value, 10);
+      const targetCoverageDays = parseInt(document.getElementById('thresh-target-coverage').value, 10);
+      const supplier = document.getElementById('thresh-supplier').value.trim();
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE}/admin/thresholds/${productId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ reorderLevel, safetyStock, leadTimeDays, targetCoverageDays, supplier })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Reorder rules for ${productId} updated`, 'success');
+          closeModal('modal-thresholds');
+          refreshAllData();
+        } else {
+          showToast(data.error || 'Failed to update rules', 'error');
+        }
+      } catch (err) {
+        showToast('Server error updating rules', 'error');
+      }
+    });
+  }
+
+  // Smart Promotion Form
+  const promoForm = document.getElementById('form-promotion');
+  if (promoForm) {
+    promoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('promo-product-select').value;
+      const discountPercent = parseFloat(document.getElementById('promo-discount-input').value);
+      const reason = document.getElementById('promo-reason-input').value.trim();
+      const expiresAt = document.getElementById('promo-expiry-input').value;
+
+      try {
+        const res = await fetchWithAuth(`${API_BASE}/admin/promotions`, {
+          method: 'POST',
+          body: JSON.stringify({ productId, discountPercent, reason, expiresAt: expiresAt || null })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Promotional offer (${discountPercent}%) activated!`, 'success');
+          closeModal('modal-promotion');
+          refreshAllData();
+        } else {
+          showToast(data.error || 'Failed to create promotion', 'error');
+        }
+      } catch (err) {
+        showToast('Server error creating promotion', 'error');
+      }
+    });
+  }
+}
+
+// ==========================================
+// 8. Navigation & Tab Switcher
+// ==========================================
+function switchTab(tabId) {
+  currentTab = tabId;
+
+  // Update Top Tab buttons
+  document.querySelectorAll('#admin-main-nav .nav-tab').forEach(tab => {
+    if (tab.getAttribute('data-tab') === tabId) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
   });
 
-  // Action Buttons
-  document.getElementById('btn-action-add-prod')?.addEventListener('click', () => openAddProductModal());
-  document.getElementById('btn-action-cycle-count')?.addEventListener('click', () => openCycleCountModal());
-  document.getElementById('btn-action-restock')?.addEventListener('click', () => openRestockModal());
-  document.getElementById('btn-action-thresholds')?.addEventListener('click', () => openThresholdsModal());
+  // Switch Active Section
+  document.querySelectorAll('.admin-tab-view').forEach(view => {
+    if (view.id === `view-${tabId}`) {
+      view.classList.add('active');
+    } else {
+      view.classList.remove('active');
+    }
+  });
 
-  // Close modals
-  document.querySelectorAll('.modal-close-x, .btn-modal-cancel').forEach(btn => {
+  // Lazy load data for specific tabs
+  if (tabId === 'sessions') loadSessionsData();
+  else if (tabId === 'sales') loadSalesData();
+  else if (tabId === 'expiry') loadExpiryData();
+  else if (tabId === 'forecasting') loadForecastData();
+  else if (tabId === 'basket') loadMarketBasketData();
+  else if (tabId === 'reports') {
+    loadAnalyticsData();
+    setTimeout(renderAllCharts, 100);
+  }
+}
+
+function setupNavigation() {
+  document.querySelectorAll('#admin-main-nav .nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabId = tab.getAttribute('data-tab');
+      if (tabId) switchTab(tabId);
+    });
+  });
+
+  // Jump tab buttons
+  document.querySelectorAll('[data-jump-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const modal = btn.closest('.admin-modal-overlay');
-      if (modal) modal.classList.add('hidden');
+      const target = btn.getAttribute('data-jump-tab');
+      if (target) switchTab(target);
     });
   });
 
-  document.querySelectorAll('.admin-modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) overlay.classList.add('hidden');
-    });
+  // Top action strip buttons
+  document.getElementById('btn-action-add-prod')?.addEventListener('click', openAddProductModal);
+  document.getElementById('btn-action-restock')?.addEventListener('click', () => openRestockModal());
+  document.getElementById('btn-action-cycle-count')?.addEventListener('click', () => openCycleCountModal());
+  document.getElementById('btn-action-thresholds')?.addEventListener('click', () => openThresholdsModal());
+  document.getElementById('btn-inventory-add')?.addEventListener('click', openAddProductModal);
+  document.getElementById('btn-inventory-restock')?.addEventListener('click', () => openRestockModal());
+  document.getElementById('btn-create-custom-promo')?.addEventListener('click', () => openPromotionModal());
+  document.getElementById('btn-refresh-sessions')?.addEventListener('click', loadSessionsData);
+  document.getElementById('btn-refresh-data')?.addEventListener('click', refreshAllData);
+
+  // Demo Mode Switch
+  const btnLive = document.getElementById('btn-mode-live');
+  const btnDemo = document.getElementById('btn-mode-demo');
+  const demoBanner = document.getElementById('demo-banner-pill');
+
+  btnLive?.addEventListener('click', () => {
+    isDemoMode = false;
+    btnLive.classList.add('active');
+    btnDemo.classList.remove('active');
+    if (demoBanner) demoBanner.classList.add('hidden');
+    showToast('Switched to Live PostgreSQL Database', 'info');
+    refreshAllData();
   });
 
-  // Database Form: Cycle Count
-  document.getElementById('count-product-select')?.addEventListener('change', updateCycleCountPreview);
-  document.getElementById('count-physical-input')?.addEventListener('input', updateCycleCountPreview);
-
-  document.getElementById('form-cycle-count')?.addEventListener('submit', async e => {
-    e.preventDefault();
-    const token = getAuthToken();
-    const prodId = document.getElementById('count-product-select').value;
-    const counted = parseInt(document.getElementById('count-physical-input').value, 10);
-    const reason = document.getElementById('count-reason').value;
-    const notes = document.getElementById('count-notes').value;
-
-    if (isNaN(counted)) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/admin/cycle-count`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ productId: prodId, countedQty: counted, reason, notes })
-      });
-
-      if (!res.ok) throw new Error('Failed to save count to database');
-
-      closeModal('modal-cycle-count');
-      await loadDashboardData(true);
-      showToast(`Physical audit persisted to PostgreSQL: ${prodId} adjusted to ${counted} units`);
-    } catch (err) {
-      showToast('Error recording count: ' + err.message, 'error');
-    }
+  btnDemo?.addEventListener('click', () => {
+    isDemoMode = true;
+    btnDemo.classList.add('active', 'demo');
+    btnLive.classList.remove('active');
+    if (demoBanner) demoBanner.classList.remove('hidden');
+    showToast('Switched to Demo Analytics Simulation Mode', 'info');
+    refreshAllData();
   });
 
-  // Database Form: Restock / Damage
-  document.getElementById('form-restock')?.addEventListener('submit', async e => {
-    e.preventDefault();
-    const token = getAuthToken();
-    const prodId = document.getElementById('restock-product-select').value;
-    const type = document.getElementById('restock-mode').value;
-    const qty = parseInt(document.getElementById('restock-qty').value, 10);
-    const poNumber = document.getElementById('restock-po').value;
-    const notes = document.getElementById('restock-notes').value;
-
-    if (isNaN(qty) || qty <= 0) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/admin/restock`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ productId: prodId, type, quantity: qty, poNumber, notes })
-      });
-
-      if (!res.ok) throw new Error('Failed to record restock in database');
-
-      closeModal('modal-restock');
-      await loadDashboardData(true);
-      showToast(`Movement saved to PostgreSQL database (${type}: ${qty} units)`);
-    } catch (err) {
-      showToast('Error processing restock: ' + err.message, 'error');
-    }
-  });
-
-  // Database Form: Thresholds
-  document.getElementById('thresh-product-select')?.addEventListener('change', updateThresholdFormFields);
-  document.getElementById('form-thresholds')?.addEventListener('submit', async e => {
-    e.preventDefault();
-    const token = getAuthToken();
-    const prodId = document.getElementById('thresh-product-select').value;
-
-    const payload = {
-      reorderLevel: parseInt(document.getElementById('thresh-reorder').value, 10) || 10,
-      safetyStock: parseInt(document.getElementById('thresh-safety').value, 10) || 5,
-      supplier: document.getElementById('thresh-supplier').value,
-      leadTimeDays: parseInt(document.getElementById('thresh-leadtime').value, 10) || 3
-    };
-
-    try {
-      const res = await fetch(`${API_BASE}/admin/thresholds/${prodId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) throw new Error('Failed to update rules in database');
-
-      closeModal('modal-thresholds');
-      await loadDashboardData(true);
-      showToast(`Reorder thresholds updated in PostgreSQL for ${prodId}`);
-    } catch (err) {
-      showToast('Error updating rules: ' + err.message, 'error');
-    }
-  });
-
-  // Database Form: Product Add / Edit
-  document.getElementById('form-product')?.addEventListener('submit', async e => {
-    e.preventDefault();
-    const token = getAuthToken();
-    const isEdit = document.getElementById('prod-form-is-edit').value === 'true';
-    const id = document.getElementById('prod-id').value.trim();
-    const name = document.getElementById('prod-name').value.trim();
-    const rfid = document.getElementById('prod-rfid').value.trim();
-    const category = document.getElementById('prod-category').value;
-    const supplier = document.getElementById('prod-supplier').value.trim();
-    const cost = parseFloat(document.getElementById('prod-cost').value) || 0;
-    const price = parseFloat(document.getElementById('prod-price').value) || 0;
-    const onHand = parseInt(document.getElementById('prod-onhand').value, 10) || 0;
-    const reorderLevel = parseInt(document.getElementById('prod-reorder').value, 10) || 10;
-    const safetyStock = parseInt(document.getElementById('prod-safety').value, 10) || 5;
-    const leadTimeDays = parseInt(document.getElementById('prod-lead-time').value, 10) || 3;
-
-    const payload = {
-      id, rfid, name, category, supplier,
-      cost, price, onHand, reorderLevel, safetyStock, leadTimeDays
-    };
-
-    try {
-      const url = isEdit ? `${API_BASE}/admin/products/${id}` : `${API_BASE}/admin/products`;
-      const method = isEdit ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Database operation failed');
-
-      closeModal('modal-product');
-      await loadDashboardData(true);
-      showToast(isEdit ? `Product ${name} updated in PostgreSQL` : `Product ${name} registered in PostgreSQL database`);
-    } catch (err) {
-      showToast('Error saving product: ' + err.message, 'error');
-    }
-  });
-
-  // Search & Filters
-  const searchInput = document.getElementById('inv-search-input');
-  const clearSearchBtn = document.getElementById('btn-clear-search');
-  searchInput?.addEventListener('input', e => {
-    inventoryFilter.search = e.target.value.trim();
-    if (clearSearchBtn) clearSearchBtn.classList.toggle('hidden', !inventoryFilter.search);
+  // Inventory Filters
+  document.getElementById('inv-search-input')?.addEventListener('input', (e) => {
+    inventoryFilter.search = e.target.value;
     renderInventoryTable();
   });
-
-  clearSearchBtn?.addEventListener('click', () => {
-    searchInput.value = '';
-    inventoryFilter.search = '';
-    clearSearchBtn.classList.add('hidden');
-    renderInventoryTable();
-  });
-
-  document.getElementById('inv-category-filter')?.addEventListener('change', e => {
+  document.getElementById('inv-filter-category')?.addEventListener('change', (e) => {
     inventoryFilter.category = e.target.value;
     renderInventoryTable();
   });
-
-  document.getElementById('inv-status-filter')?.addEventListener('change', e => {
+  document.getElementById('inv-filter-status')?.addEventListener('change', (e) => {
     inventoryFilter.status = e.target.value;
     renderInventoryTable();
   });
-
-  document.getElementById('inv-sort-select')?.addEventListener('change', e => {
+  document.getElementById('inv-sort-select')?.addEventListener('change', (e) => {
     inventoryFilter.sort = e.target.value;
     renderInventoryTable();
   });
 
-  // Table vs Grid View Toggle
-  document.getElementById('btn-view-table')?.addEventListener('click', () => {
-    inventoryFilter.view = 'table';
-    document.getElementById('btn-view-table').classList.add('active');
-    document.getElementById('btn-view-cards').classList.remove('active');
-    document.getElementById('inventory-table').classList.remove('hidden');
-    document.getElementById('inventory-card-grid').classList.add('hidden');
+  // Movements Filter
+  document.getElementById('mov-search-input')?.addEventListener('input', (e) => {
+    movementsFilter.search = e.target.value;
+    renderMovementsTable();
+  });
+  document.getElementById('mov-filter-action')?.addEventListener('change', (e) => {
+    movementsFilter.action = e.target.value;
+    renderMovementsTable();
   });
 
-  document.getElementById('btn-view-cards')?.addEventListener('click', () => {
-    inventoryFilter.view = 'cards';
-    document.getElementById('btn-view-cards').classList.add('active');
-    document.getElementById('btn-view-table').classList.remove('active');
-    document.getElementById('inventory-table').classList.add('hidden');
-    document.getElementById('inventory-card-grid').classList.remove('hidden');
+  // Expiry Filter Buttons
+  document.querySelectorAll('[data-expiry-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-expiry-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      expiryFilter = btn.getAttribute('data-expiry-filter');
+      renderExpirySection();
+    });
   });
 
-  // Movement Filters
-  document.getElementById('movement-type-filter')?.addEventListener('change', renderMovementsTable);
-  document.getElementById('movement-product-filter')?.addEventListener('change', renderMovementsTable);
+  // Forecast Window & Filter
+  document.getElementById('forecast-window-select')?.addEventListener('change', (e) => {
+    forecastWindowDays = parseInt(e.target.value, 10);
+    loadForecastData();
+  });
+  document.getElementById('forecast-filter-class')?.addEventListener('change', (e) => {
+    forecastFilterClass = e.target.value;
+    renderForecastSection();
+  });
 
-  // Sync Data Button
-  document.getElementById('btn-refresh-data')?.addEventListener('click', () => {
-    loadDashboardData(false);
+  // Market Basket Sort
+  document.getElementById('basket-sort-select')?.addEventListener('change', (e) => {
+    if (!basketData || !basketData.pairs) return;
+    const val = e.target.value;
+    if (val === 'lift-desc') basketData.pairs.sort((a, b) => b.lift - a.lift);
+    else if (val === 'count-desc') basketData.pairs.sort((a, b) => b.coOccurrenceCount - a.coOccurrenceCount);
+    else if (val === 'confidence-desc') basketData.pairs.sort((a, b) => b.confidenceAtoB - a.confidenceAtoB);
+    renderMarketBasketSection();
+  });
+
+  // Reports Sub-Nav Tabs
+  document.querySelectorAll('[data-report-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('[data-report-tab]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentReportTab = tab.getAttribute('data-report-tab');
+
+      document.querySelectorAll('.reports-tab-content').forEach(content => {
+        if (content.id === `reports-tab-${currentReportTab}`) {
+          content.classList.remove('hidden');
+        } else {
+          content.classList.add('hidden');
+        }
+      });
+      setTimeout(renderAllCharts, 50);
+    });
   });
 
   // Export CSV
   document.getElementById('btn-export-csv')?.addEventListener('click', () => {
-    const headers = ['Product ID', 'RFID UID', 'Name', 'Category', 'On-Hand', 'Reserved', 'Available', 'Cost', 'Price', 'Reorder Level', 'Safety Stock', 'Status'];
+    if (products.length === 0) {
+      showToast('No product data to export', 'warning');
+      return;
+    }
+    const headers = ['Product ID', 'Name', 'RFID Tag', 'Category', 'Price', 'Cost', 'On Hand', 'Reserved', 'Available', 'Status', 'Sold Units', 'Supplier'];
     const rows = products.map(p => [
       p.id,
+      `"${p.name.replace(/"/g, '""')}"`,
       p.rfid,
-      `"${p.name}"`,
       p.category,
+      p.price,
+      p.cost,
       p.onHand,
       p.reserved,
-      getAvailableStock(p),
-      p.cost,
-      p.price,
-      p.reorderLevel,
-      p.safetyStock,
-      getProductStatus(p)
+      p.available,
+      p.status,
+      p.soldUnits,
+      `"${(p.supplier || '').replace(/"/g, '""')}"`
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -1236,435 +1812,37 @@ function setupEventListeners() {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    showToast('Inventory CSV export initiated');
+    showToast('Inventory CSV exported successfully', 'success');
   });
 
-  // Date presets
-  document.querySelectorAll('.date-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      analyticsFilter.datePreset = pill.dataset.preset;
-      updateAnalyticsFilters();
-    });
-  });
-
-  // Granularity toggle
-  document.querySelectorAll('.granularity-toggle .toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.granularity-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      analyticsFilter.granularity = btn.dataset.granularity;
-      updateAnalyticsFilters();
-    });
-  });
-
-  // Filter Category & Product in Analytics
-  document.getElementById('filter-category')?.addEventListener('change', e => {
-    analyticsFilter.category = e.target.value;
-    updateAnalyticsFilters();
-  });
-
-  document.getElementById('filter-product')?.addEventListener('change', e => {
-    analyticsFilter.productId = e.target.value;
-    updateAnalyticsFilters();
-  });
-
-  // -- Sessions Tab Event Listeners --
-  document.getElementById('session-status-filter')?.addEventListener('change', () => loadSessionsData());
-  document.getElementById('btn-refresh-sessions')?.addEventListener('click', () => loadSessionsData());
-  document.getElementById('btn-close-session-detail')?.addEventListener('click', () => {
-    document.getElementById('session-detail-panel')?.classList.add('hidden');
-  });
-
-  // -- Sales Tab Event Listeners --
-  document.getElementById('btn-refresh-sales')?.addEventListener('click', () => loadSalesData());
-  document.getElementById('btn-apply-sales-filter')?.addEventListener('click', () => loadSalesData());
-  document.getElementById('btn-close-sale-detail')?.addEventListener('click', () => {
-    document.getElementById('sale-detail-panel')?.classList.add('hidden');
-  });
-
-  // Restock mode tabs
-  document.querySelectorAll('.restock-mode-tabs .mode-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.restock-mode-tabs .mode-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const mode = tab.dataset.mode;
-      const modeInput = document.getElementById('restock-mode');
-      if (modeInput) modeInput.value = mode === 'damaged' ? 'DAMAGE_WRITEOFF' : 'RESTOCK';
-      const incoming = document.getElementById('restock-fields-incoming');
-      const damaged = document.getElementById('restock-fields-damaged');
-      const qtyLabel = document.getElementById('restock-qty-label');
-      const submitBtn = document.getElementById('btn-submit-restock');
-      if (mode === 'damaged') {
-        if (incoming) incoming.classList.add('hidden');
-        if (damaged) damaged.classList.remove('hidden');
-        if (qtyLabel) qtyLabel.textContent = 'QUANTITY DAMAGED / EXPIRED (UNITS) *';
-        if (submitBtn) submitBtn.textContent = 'RECORD DAMAGE WRITE-OFF';
-      } else {
-        if (incoming) incoming.classList.remove('hidden');
-        if (damaged) damaged.classList.add('hidden');
-        if (qtyLabel) qtyLabel.textContent = 'QUANTITY RECEIVED (UNITS) *';
-        if (submitBtn) submitBtn.textContent = 'RECORD SHIPMENT INVENTORY';
-      }
-    });
-  });
-
-  // Low stock card click -> switch to inventory with Low Stock filter
-  document.getElementById('kpi-card-low-stock')?.addEventListener('click', () => {
-    // Switch to inventory tab
-    const tabs = document.querySelectorAll('#admin-top-nav .nav-tab');
-    tabs.forEach(t => t.classList.remove('active'));
-    const invTab = document.querySelector('[data-tab="inventory"]');
-    if (invTab) invTab.classList.add('active');
-    document.querySelectorAll('.admin-tab-view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-inventory')?.classList.add('active');
-    // Set filter to Low Stock
-    const statusFilter = document.getElementById('inv-status-filter');
-    if (statusFilter) statusFilter.value = 'Low stock';
-    inventoryFilter.status = 'Low stock';
-    renderInventoryTable();
-  });
-
-  // Close modal buttons
-  document.querySelectorAll('[data-close-modal]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      closeModal(btn.dataset.closeModal);
-    });
-  });
+  // Sales Filter Apply
+  document.getElementById('btn-apply-sales-filter')?.addEventListener('click', loadSalesData);
 }
 
 // ==========================================
-// 10. Sessions Data Loading & Rendering
+// 9. Application Bootstrap
 // ==========================================
-async function loadSessionsData() {
-  const token = getAuthToken();
-  if (!token) return;
-
-  const statusFilter = document.getElementById('session-status-filter')?.value || 'ALL';
-
-  try {
-    const url = `${API_BASE}/admin/sessions?status=${statusFilter}&limit=50`;
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (res.status === 401) {
-      window.location.replace('/admin-login.html');
-      return;
-    }
-
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-
-    const data = await res.json();
-    if (data.success) {
-      sessionsData = data.sessions || [];
-      renderSessionsTable();
-    }
-  } catch (err) {
-    console.error('Failed to load sessions:', err);
-    showToast('Error loading sessions: ' + err.message, 'error');
-  }
-}
-
-function renderSessionsTable() {
-  const tbody = document.getElementById('sessions-table-body');
-  if (!tbody) return;
-
-  // Update summary chips
-  const activeCount = sessionsData.filter(s => s.status === 'active').length;
-  const completedCount = sessionsData.filter(s => s.status === 'completed').length;
-  const cancelledCount = sessionsData.filter(s => s.status === 'cancelled').length;
-
-  const elTotal = document.getElementById('sessions-total-count');
-  const elActive = document.getElementById('sessions-active-count');
-  const elCompleted = document.getElementById('sessions-completed-count');
-  const elCancelled = document.getElementById('sessions-cancelled-count');
-
-  if (elTotal) elTotal.textContent = String(sessionsData.length);
-  if (elActive) elActive.textContent = String(activeCount);
-  if (elCompleted) elCompleted.textContent = String(completedCount);
-  if (elCancelled) elCancelled.textContent = String(cancelledCount);
-
-  if (sessionsData.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:24px;">NO SESSIONS FOUND IN DATABASE</td></tr>`;
-    return;
-  }
-
-  let html = '';
-  sessionsData.forEach(s => {
-    const statusClass = `session-status-${s.status}`;
-    html += `
-      <tr>
-        <td><strong>${s.session_id}</strong></td>
-        <td>${s.cart_id || '—'}</td>
-        <td><span class="session-status-pill ${statusClass}">${s.status.toUpperCase()}</span></td>
-        <td class="text-right">${s.item_count}</td>
-        <td class="text-right">${formatCurrency(s.subtotal)}</td>
-        <td>${s.started_at || '—'}</td>
-        <td>${s.ended_at || '—'}</td>
-        <td>${s.sale_id || '—'}</td>
-        <td class="text-center">
-          <button class="btn-row-action btn-row-view btn-session-detail" data-session-id="${s.session_id}">👁 DETAIL</button>
-        </td>
-      </tr>
-    `;
-  });
-  tbody.innerHTML = html;
-
-  // Attach detail buttons
-  document.querySelectorAll('.btn-session-detail').forEach(btn => {
-    btn.addEventListener('click', () => openSessionDetail(btn.dataset.sessionId));
-  });
-}
-
-function openSessionDetail(sessionId) {
-  const sess = sessionsData.find(s => s.session_id === sessionId);
-  if (!sess) return;
-
-  document.getElementById('session-detail-title').textContent = `SESSION: ${sess.session_id}`;
-  document.getElementById('sess-detail-id').textContent = sess.session_id;
-  document.getElementById('sess-detail-cart').textContent = sess.cart_id || '—';
-  document.getElementById('sess-detail-status').textContent = sess.status.toUpperCase();
-  document.getElementById('sess-detail-started').textContent = sess.started_at || '—';
-  document.getElementById('sess-detail-ended').textContent = sess.ended_at || '—';
-
-  const itemsTbody = document.getElementById('sess-detail-items-tbody');
-  if (itemsTbody) {
-    if (!sess.items || sess.items.length === 0) {
-      itemsTbody.innerHTML = '<tr><td colspan="5" class="text-center">No items in cart</td></tr>';
-    } else {
-      itemsTbody.innerHTML = sess.items.map(item => `
-        <tr>
-          <td><strong>${item.name}</strong> <span style="font-size:0.65rem;color:#666;">(${item.product_id})</span></td>
-          <td>${item.category || '—'}</td>
-          <td class="text-right">${item.quantity}</td>
-          <td class="text-right">${formatCurrency(item.unit_price_at_addition)}</td>
-          <td class="text-right">${formatCurrency(item.subtotal)}</td>
-        </tr>
-      `).join('');
-    }
-  }
-
-  document.getElementById('session-detail-panel')?.classList.remove('hidden');
-}
-
-// ==========================================
-// 11. Sales Data Loading & Rendering
-// ==========================================
-async function loadSalesData() {
-  const token = getAuthToken();
-  if (!token) return;
-
-  const startDate = document.getElementById('sales-filter-start')?.value || '';
-  const endDate = document.getElementById('sales-filter-end')?.value || '';
-
-  let url = `${API_BASE}/admin/sales?limit=100`;
-  if (startDate && endDate) {
-    url += `&startDate=${startDate}&endDate=${endDate}`;
-  }
-
-  try {
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (res.status === 401) {
-      window.location.replace('/admin-login.html');
-      return;
-    }
-
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-
-    const data = await res.json();
-    if (data.success) {
-      salesData = data.sales || [];
-      salesTotals = data.totals || { count: 0, revenue: 0, tax: 0 };
-      renderSalesTable();
-    }
-  } catch (err) {
-    console.error('Failed to load sales:', err);
-    showToast('Error loading sales: ' + err.message, 'error');
-  }
-}
-
-function renderSalesTable() {
-  const tbody = document.getElementById('sales-table-body');
-  if (!tbody) return;
-
-  // Update summary chips
-  const elCount = document.getElementById('sales-total-count');
-  const elRevenue = document.getElementById('sales-total-revenue');
-  const elTax = document.getElementById('sales-total-tax');
-
-  if (elCount) elCount.textContent = String(salesTotals.count);
-  if (elRevenue) elRevenue.textContent = formatCurrency(salesTotals.revenue);
-  if (elTax) elTax.textContent = formatCurrency(salesTotals.tax);
-
-  if (salesData.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="padding:24px;">NO SALES RECORDS FOUND</td></tr>`;
-    return;
-  }
-
-  let html = '';
-  salesData.forEach(sale => {
-    html += `
-      <tr>
-        <td><strong>${sale.sale_id}</strong></td>
-        <td>${sale.session_id || '—'}</td>
-        <td class="text-right">${sale.item_count}</td>
-        <td class="text-right">${formatCurrency(sale.subtotal)}</td>
-        <td class="text-right">${formatCurrency(sale.tax_amount)}</td>
-        <td class="text-right"><strong>${formatCurrency(sale.total)}</strong></td>
-        <td>${sale.completed_at || '—'}</td>
-        <td class="text-center">
-          <button class="btn-row-action btn-row-view btn-sale-detail" data-sale-id="${sale.sale_id}">👁 DETAIL</button>
-        </td>
-      </tr>
-    `;
-  });
-  tbody.innerHTML = html;
-
-  // Attach detail buttons
-  document.querySelectorAll('.btn-sale-detail').forEach(btn => {
-    btn.addEventListener('click', () => openSaleDetail(btn.dataset.saleId));
-  });
-}
-
-function openSaleDetail(saleId) {
-  const sale = salesData.find(s => s.sale_id === saleId);
-  if (!sale) return;
-
-  document.getElementById('sale-detail-title').textContent = `SALE: ${sale.sale_id}`;
-  document.getElementById('sale-detail-id').textContent = sale.sale_id;
-  document.getElementById('sale-detail-session').textContent = sale.session_id || '—';
-  document.getElementById('sale-detail-subtotal').textContent = formatCurrency(sale.subtotal);
-  document.getElementById('sale-detail-tax').textContent = formatCurrency(sale.tax_amount);
-  document.getElementById('sale-detail-total').textContent = formatCurrency(sale.total);
-  document.getElementById('sale-detail-completed').textContent = sale.completed_at || '—';
-
-  const itemsTbody = document.getElementById('sale-detail-items-tbody');
-  if (itemsTbody) {
-    if (!sale.lineItems || sale.lineItems.length === 0) {
-      itemsTbody.innerHTML = '<tr><td colspan="5" class="text-center">No line items</td></tr>';
-    } else {
-      itemsTbody.innerHTML = sale.lineItems.map(li => `
-        <tr>
-          <td><strong>${li.name}</strong> <span style="font-size:0.65rem;color:#666;">(${li.product_id})</span></td>
-          <td>${li.category || '—'}</td>
-          <td class="text-right">${li.quantity}</td>
-          <td class="text-right">${formatCurrency(li.unit_price)}</td>
-          <td class="text-right">${formatCurrency(li.line_subtotal)}</td>
-        </tr>
-      `).join('');
-    }
-  }
-
-  document.getElementById('sale-detail-panel')?.classList.remove('hidden');
-}
-
-// ==========================================
-// 12. Enhanced Analytics (Real DB Charts)
-// ==========================================
-async function loadAnalyticsData() {
-  const token = getAuthToken();
-  if (!token) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/admin/analytics?granularity=${analyticsFilter.granularity}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    if (!res.ok) return;
-
-    const data = await res.json();
-    if (!data.success) return;
-
-    // Update revenue trend chart with real time series data
-    if (revenueTrendChart && data.timeSeries?.length > 0) {
-      const labels = data.timeSeries.map(d => {
-        const date = new Date(d.bucket);
-        if (analyticsFilter.granularity === 'daily') return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (analyticsFilter.granularity === 'weekly') return 'W' + Math.ceil(date.getDate() / 7) + ' ' + date.toLocaleDateString('en-US', { month: 'short' });
-        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      });
-      revenueTrendChart.data.labels = labels;
-      revenueTrendChart.data.datasets[0].data = data.timeSeries.map(d => d.revenue);
-      revenueTrendChart.data.datasets[1].data = data.timeSeries.map(d => d.orders);
-      revenueTrendChart.update();
-
-      // Update chart footer with peak revenue
-      const peak = data.timeSeries.reduce((max, d) => d.revenue > max.revenue ? d : max, data.timeSeries[0]);
-      const peakLabel = labels[data.timeSeries.indexOf(peak)] || '';
-      const peakMeta = document.querySelector('#view-analytics .chart-col-wide .chart-card-footer .chart-meta');
-      if (peakMeta) peakMeta.textContent = `PEAK REVENUE: ${formatCurrency(peak.revenue)} @ ${peakLabel}`;
-    }
-
-    // Update category chart
-    if (categorySalesChart && data.categorySales?.length > 0) {
-      categorySalesChart.data.labels = data.categorySales.map(c => c.category);
-      categorySalesChart.data.datasets[0].data = data.categorySales.map(c => c.revenue);
-      categorySalesChart.data.datasets[1].data = data.categorySales.map(c => c.units);
-      categorySalesChart.update();
-
-      // Update category chart footer
-      const topCat = data.categorySales[0];
-      const totalCatRev = data.categorySales.reduce((s, c) => s + c.revenue, 0);
-      const catPct = totalCatRev > 0 ? ((topCat.revenue / totalCatRev) * 100).toFixed(1) : '0.0';
-      const catFooter = document.querySelector('#view-analytics .hud-chart-card:nth-child(2) .chart-card-footer .chart-meta');
-      if (catFooter) catFooter.textContent = `LEADER: ${topCat.category.toUpperCase()} (${catPct}% OF TOTAL REVENUE)`;
-    }
-
-    // Update top products chart
-    if (topProductsChart && data.topProducts?.length > 0) {
-      topProductsChart.data.labels = data.topProducts.map(p => p.name);
-      topProductsChart.data.datasets[0].data = data.topProducts.map(p => p.revenue);
-      topProductsChart.update();
-
-      // Update best seller in ribbon and chart footer
-      const bestSeller = data.topProducts[0];
-      const bestSellerEl = document.getElementById('metric-best-seller');
-      if (bestSellerEl) bestSellerEl.textContent = `${bestSeller.name} (${bestSeller.units} sold)`;
-
-      const topFooter = document.querySelector('#view-analytics .hud-chart-card:nth-child(3) .chart-card-footer .chart-meta');
-      if (topFooter) topFooter.textContent = `TOP PRODUCT: ${bestSeller.name.toUpperCase()} (${formatCurrency(bestSeller.revenue)})`;
-    }
-
-    // Update traffic velocity chart from hourly sales data from dashboard
-    if (trafficVelocityChart && dbAnalytics?.hourlySales?.length > 0) {
-      trafficVelocityChart.data.labels = dbAnalytics.hourlySales.map(h => h.hour);
-      trafficVelocityChart.data.datasets[0].data = dbAnalytics.hourlySales.map(h => h.orders);
-      trafficVelocityChart.update();
-    }
-
-    // Update KPI sub-texts with live data
-    const outOfStockCount = dbKPIs?.outOfStockCount ?? 0;
-    const lowStockCount = dbKPIs?.lowStockCount ?? 0;
-    const belowSafety = Math.max(0, lowStockCount - outOfStockCount);
-    const lowStockSub = document.querySelector('#kpi-card-low-stock .kpi-subtext');
-    if (lowStockSub) {
-      lowStockSub.innerHTML = `
-        <span class="text-danger">${outOfStockCount} OUT OF STOCK</span>
-        <span>// ${belowSafety} BELOW SAFETY</span>
-      `;
-    }
-
-  } catch (err) {
-    console.error('Failed to load analytics data:', err);
-  }
-}
-
-// ==========================================
-// 13. Application Bootstrap
-// ==========================================
-async function initApp() {
+async function initAdminApp() {
   const isAuthed = await enforceAuth();
   if (!isAuthed) return;
 
-  setupEventListeners();
-  await loadDashboardData(true);
-  // Load enhanced analytics for charts after initial data
-  loadAnalyticsData();
+  setupLogout();
+  setupNavigation();
+  setupModalClosers();
+  setupForms();
+
+  // Set default sales date filter (today)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const startInput = document.getElementById('sales-start-date');
+  const endInput = document.getElementById('sales-end-date');
+  if (startInput) startInput.value = todayStr;
+  if (endInput) endInput.value = todayStr;
+
+  // Load initial data
+  await loadDashboardData();
+  await loadForecastData();
+  await loadExpiryData();
+  await loadMarketBasketData();
 }
 
-window.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', initAdminApp);

@@ -183,8 +183,34 @@ async function initDb() {
       ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_level INTEGER DEFAULT 10;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS safety_stock INTEGER DEFAULT 5;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS lead_time_days INTEGER DEFAULT 3;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS target_coverage_days INTEGER DEFAULT 14;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS last_restocked DATE DEFAULT CURRENT_DATE;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier TEXT DEFAULT 'General Supplier';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS batch_number TEXT;
+
+      CREATE TABLE IF NOT EXISTS product_batches (
+        id SERIAL PRIMARY KEY,
+        batch_id TEXT UNIQUE NOT NULL,
+        product_id TEXT REFERENCES products(product_id) ON DELETE CASCADE,
+        batch_number TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        expiry_date DATE NOT NULL,
+        received_date DATE DEFAULT CURRENT_DATE,
+        supplier TEXT,
+        status TEXT DEFAULT 'active'
+      );
+
+      CREATE TABLE IF NOT EXISTS product_promotions (
+        id SERIAL PRIMARY KEY,
+        promo_id TEXT UNIQUE NOT NULL,
+        product_id TEXT REFERENCES products(product_id) ON DELETE CASCADE,
+        discount_percent NUMERIC(5,2) NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT DEFAULT 'recommended',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP
+      );
     `);
 
     // Ensure default admin user is seeded in the database
@@ -205,7 +231,7 @@ async function initDb() {
 
     // Ensure products and store catalog are seeded if empty
     const productCountRes = await client.query('SELECT COUNT(*) FROM products');
-    if (parseInt(productCountRes.rows[0].count, 10) === 0) {
+    if (productCountRes && productCountRes.rows && productCountRes.rows[0] && parseInt(productCountRes.rows[0].count, 10) === 0) {
       console.log('[db] No products found in database. Seeding real store inventory catalog...');
 
       const initialProducts = [

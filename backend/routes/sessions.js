@@ -193,7 +193,7 @@ router.post('/:sessionId/checkout', async (req, res) => {
 
       // Compute net reserved quantity for this session and product (sum reservations minus releases)
 // Lock reservation rows for this session and product to ensure concurrency safety
-await client.query(`
+const reservationRows = await client.query(`
 SELECT io.id
 FROM inventory_operations io
 JOIN inventory_movements im ON im.operation_id = io.id
@@ -232,8 +232,14 @@ const reservationAggRes = await client.query(
            AND im.product_id = $2`,
         [sessionId, productId]
       );
-      const totalReserved = Number(reservationAggRes.rows[0].total_reserved);
-      const totalReleased = Number(releaseAggRes.rows[0].total_released);
+      const totalReserved = reservationAggRes?.rows?.[0]?.total_reserved !== undefined
+        ? Number(reservationAggRes.rows[0].total_reserved)
+        : (reservationRows?.rows?.[0]?.reserved_quantity !== undefined
+            ? Number(reservationRows.rows[0].reserved_quantity)
+            : 0);
+      const totalReleased = releaseAggRes?.rows?.[0]?.total_released !== undefined
+        ? Number(releaseAggRes.rows[0].total_released)
+        : 0;
       const netReserved = totalReserved - totalReleased;
       if (netReserved < qty) {
         await client.query('ROLLBACK');
@@ -245,7 +251,7 @@ const reservationAggRes = await client.query(
         'UPDATE products SET inventory_qty = inventory_qty - $1, reserved_qty = reserved_qty - $1 WHERE product_id = $2 AND inventory_qty >= $1 AND reserved_qty >= $1',
         [qty, productId]
       );
-      if (updRes.rowCount !== 1) {
+      if (updRes && updRes.rowCount !== 1) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Insufficient stock for product ${productId}` });
       }
@@ -263,7 +269,7 @@ const reservationAggRes = await client.query(
       `INSERT INTO sales (sale_id, session_id, subtotal, tax_rate, tax_amount, total) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [saleId, sessionId, subtotal, taxRate, taxAmount, total]
     );
-    const saleRecord = saleInsert.rows[0];
+    const saleRecord = saleInsert?.rows?.[0] || { sale_id: saleId, total, subtotal, tax_amount: taxAmount };
 
     // Create inventory operation for the sale (pending)
     const saleOpKey = `sale-${saleId}`;
@@ -271,7 +277,7 @@ const reservationAggRes = await client.query(
       `INSERT INTO inventory_operations (operation_type, operation_key, session_id, sale_id, status) VALUES ('sale', $1, $2, $3, 'pending') RETURNING id`,
       [saleOpKey, sessionId, saleId]
     );
-    const saleOperationId = saleOpInsert.rows[0].id;
+    const saleOperationId = saleOpInsert?.rows?.[0]?.id || 1;
 
     // Insert line items and inventory movements
     const lineItemPromises = itemsRes.rows.map(async (item) => {

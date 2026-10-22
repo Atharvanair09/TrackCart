@@ -3,728 +3,893 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>TrackCart Admin // Store Operations & Inventory Control</title>
-    <meta name="description" content="TrackCart Admin Console: Real-time sales analytics, inventory telemetry, stock movements, and store management." />
+    <title>TrackCart Admin // Smart Cart Management & Inventory Intelligence</title>
+    <meta name="description" content="TrackCart Admin Console: Real-time inventory intelligence, demand forecasting, market basket analysis, expiry tracking, and sales analytics." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/admin.css" />
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   </head>
   <body class="admin-body">
     <div id="admin-app">
-      <!-- 1. Top HUD Global Bar -->
-      <header class="global-hud-bar">
-        <div class="hud-bar-left">
-          <span class="hud-tag">SYS_ADMIN</span>
-          <span class="hud-sep">//</span>
-          <span class="hud-node">CONSOLE_ROOT_01</span>
-          <span class="hud-sep">//</span>
-          <span class="hud-tag text-accent-green">LIVE_SYNC ■</span>
-        </div>
-        <div class="hud-bar-center">
-          <span>STORE_NODE: TC-FLAGSHIP-01</span>
-          <span class="hud-sep">//</span>
-          <span id="hud-live-clock">18:05:00 UTC</span>
+      
+      <!-- 1. Top Modern Navigation Header -->
+      <header class="admin-header">
+        <div class="admin-top-bar">
+          <div class="brand-group">
+            <div class="brand-logo-mark">TC</div>
+            <div class="brand-titles">
+              <span class="brand-name">TrackCart</span>
+              <span class="brand-subtitle">Smart Cart Operations & Intelligence</span>
+            </div>
+          </div>
+
+          <div class="top-bar-center">
+            <!-- Demo Mode Toggle -->
+            <div class="mode-toggle-card">
+              <button id="btn-mode-live" class="mode-toggle-btn active" title="View live PostgreSQL data">
+                <span>🟢</span> Live DB Data
+              </button>
+              <button id="btn-mode-demo" class="mode-toggle-btn" title="Toggle simulation mode for full demo analytics">
+                <span>✨</span> Demo Mode
+              </button>
+            </div>
+
+            <div class="live-indicator-pill" id="live-indicator-status">
+              <span class="live-dot"></span>
+              <span id="live-status-text">Live Sync</span>
+            </div>
+          </div>
+
+          <div class="top-bar-right">
+            <span class="admin-user-pill" id="hud-admin-identity">
+              <span>👤</span> Store Admin
+            </span>
+            <button id="btn-refresh-data" class="btn-header-action" title="Refresh Live Data">
+              <span>🔄</span> Sync
+            </button>
+            <button id="btn-export-csv" class="btn-header-action" title="Export CSV Report">
+              <span>💾</span> Export CSV
+            </button>
+            <a href="/index.html" class="btn-header-action" title="Switch to Customer Cart Interface">
+              <span>🛒</span> Cart Interface
+            </a>
+            <button id="btn-admin-logout" class="btn-header-action logout" title="Sign out">
+              <span>🔒</span> Logout
+            </button>
+          </div>
         </div>
 
-      </header>
-
-      <!-- 2. Desktop & Tablet Top Navigation Bar -->
-      <nav id="admin-top-nav" class="hud-top-nav font-mono">
-        <div class="admin-nav-brand-group">
-          <span class="desktop-nav-brand">TRACKCART // ADMIN</span>
-          <span class="admin-badge-indicator">MGMT_PORTAL</span>
-        </div>
-        
-        <div class="admin-tab-group">
-          <button class="nav-tab active" data-tab="analytics">
-            <span class="tab-icon">📊</span> SALES ANALYTICS
+        <!-- 2. Primary 9 Section Tabs -->
+        <nav class="admin-tab-nav" id="admin-main-nav">
+          <button class="nav-tab active" data-tab="dashboard">
+            <span class="tab-icon">🏠</span> Dashboard
           </button>
           <button class="nav-tab" data-tab="inventory">
-            <span class="tab-icon">📦</span> INVENTORY CONTROL
-          </button>
-          <button class="nav-tab" data-tab="movements">
-            <span class="tab-icon">📜</span> STOCK MOVEMENTS
+            <span class="tab-icon">📦</span> Products & Inventory
           </button>
           <button class="nav-tab" data-tab="sessions">
-            <span class="tab-icon">🛒</span> SESSIONS
+            <span class="tab-icon">🛒</span> Shopping Carts
           </button>
           <button class="nav-tab" data-tab="sales">
-            <span class="tab-icon">💰</span> SALES HISTORY
+            <span class="tab-icon">💰</span> Sales & Orders
           </button>
+          <button class="nav-tab" data-tab="expiry">
+            <span class="tab-icon">⏳</span> Expiry & Offers
+          </button>
+          <button class="nav-tab" data-tab="forecasting">
+            <span class="tab-icon">📈</span> Demand Forecasting
+          </button>
+          <button class="nav-tab" data-tab="basket">
+            <span class="tab-icon">🛍️</span> Market Basket Analysis
+          </button>
+          <button class="nav-tab" data-tab="reports">
+            <span class="tab-icon">📊</span> Reports & Analytics
+          </button>
+          <button class="nav-tab" data-tab="movements">
+            <span class="tab-icon">📜</span> Inventory History
+          </button>
+        </nav>
+      </header>
+
+      <!-- 3. Store Action Sub-Header Strip -->
+      <section class="admin-action-bar">
+        <div class="action-bar-left">
+          <span class="store-badge">Flagship Superstore #104</span>
+          <span class="store-meta-pill">RFID Smart Gateway Online</span>
+          <span class="store-meta-pill" id="hud-live-clock">--:--:--</span>
+          <span id="demo-banner-pill" class="status-pill status-expired hidden" style="background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe;">
+            ✨ DEMO SIMULATION ACTIVE
+          </span>
         </div>
 
-        <div class="admin-nav-right-actions">
-          <button id="btn-export-csv" class="admin-action-btn-pill font-mono" title="Export CSV Report">
-            <span>💾</span> EXPORT CSV
+        <div class="action-bar-right">
+          <button id="btn-action-add-prod" class="btn-primary">
+            <span>+</span> Add Product
           </button>
-          <button id="btn-refresh-data" class="admin-action-btn-pill font-mono" title="Sync Live Data">
-            <span>🔄</span> SYNC
+          <button id="btn-action-restock" class="btn-secondary">
+            <span>📥</span> Receive Stock
           </button>
-          <button id="btn-admin-logout" class="admin-action-btn-pill font-mono" title="Sign out of Admin Session">
-            <span>🔒</span> LOGOUT
+          <button id="btn-action-cycle-count" class="btn-secondary">
+            <span>⚖️</span> Physical Count
           </button>
-          <a href="/index.html" class="admin-exit-cart-link font-mono" title="Switch to Customer Cart Interface">
-            <span class="tab-icon">🛒</span> CART IFACE
-          </a>
-        </div>
-      </nav>
-
-      <!-- 3. Top Action Sub-Header Strip -->
-      <section class="admin-sub-strip">
-        <div class="sub-strip-left font-mono">
-          <span class="sub-strip-label">STORE CONSOLE:</span>
-          <strong class="sub-strip-title">FLAGSHIP SUPERSTORE #104</strong>
-          <span class="hud-badge status-online">■ ACTIVE REGISTRY</span>
-          <span class="sub-strip-meta">RFID GATEWAY: CONNECTED (4 CARTS ACTIVE)</span>
-        </div>
-
-        <div class="sub-strip-right">
-          <button id="btn-action-add-prod" class="hud-btn-action font-mono">
-            <span class="btn-icon-plus">+</span> ADD PRODUCT
-          </button>
-          <button id="btn-action-cycle-count" class="hud-btn-action font-mono">
-            <span>⚖</span> PHYSICAL COUNT
-          </button>
-          <button id="btn-action-restock" class="hud-btn-action font-mono">
-            <span>📥</span> RESTOCK / DAMAGE
-          </button>
-          <button id="btn-action-thresholds" class="hud-btn-action font-mono">
-            <span>⚙</span> REORDER RULES
+          <button id="btn-action-thresholds" class="btn-secondary">
+            <span>⚙️</span> Reorder Rules
           </button>
         </div>
       </section>
 
-      <!-- Main Admin Viewport Container -->
+      <!-- 4. Main Admin Viewport Container -->
       <main class="admin-main-container">
-        
-        <!-- SECTION 1: TOP KPI CARDS (Always visible) -->
-        <section class="admin-kpi-grid">
-          <!-- KPI 1: Today's Sales -->
-          <div class="admin-kpi-card">
-            <div class="kpi-card-header font-mono">
-              <span class="kpi-code">SYS.REV_01</span>
-              <span class="kpi-badge positive">+14.2% ▲</span>
-            </div>
-            <div class="kpi-card-body">
-              <div class="kpi-label font-mono">TODAY'S GROSS SALES</div>
-              <div class="kpi-value font-mono" id="kpi-today-sales">$4,892.50</div>
-              <div class="kpi-subtext font-mono">
-                <span>VS YESTERDAY: $4,284.00</span>
-                <span class="kpi-tag-mini">TARGET: $5,000 (97.8%)</span>
-              </div>
-            </div>
-            <div class="kpi-card-footer font-mono">
-              <div class="kpi-progress-bar">
-                <div class="kpi-progress-fill" style="width: 97.8%;"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- KPI 2: Completed Orders -->
-          <div class="admin-kpi-card">
-            <div class="kpi-card-header font-mono">
-              <span class="kpi-code">SYS.ORD_02</span>
-              <span class="kpi-badge positive">+5.6% ▲</span>
-            </div>
-            <div class="kpi-card-body">
-              <div class="kpi-label font-mono">COMPLETED ORDERS</div>
-              <div class="kpi-value font-mono" id="kpi-completed-orders">168</div>
-              <div class="kpi-subtext font-mono">
-                <span>AVG CHECKOUT: 3m 42s</span>
-                <span class="kpi-tag-mini">0 VOIDS // 100% SUCCESS</span>
-              </div>
-            </div>
-            <div class="kpi-card-footer font-mono">
-              <span class="kpi-footer-metric">CART CAPACITY: 12 AVAILABLE</span>
-            </div>
-          </div>
-
-          <!-- KPI 3: Low Stock Products -->
-          <div class="admin-kpi-card kpi-card-warning" id="kpi-card-low-stock" title="Click to view low stock items">
-            <div class="kpi-card-header font-mono">
-              <span class="kpi-code">SYS.STK_03</span>
-              <span class="kpi-badge warning">ALERT ⚠</span>
-            </div>
-            <div class="kpi-card-body">
-              <div class="kpi-label font-mono">LOW STOCK PRODUCTS</div>
-              <div class="kpi-value font-mono" id="kpi-low-stock-count">3</div>
-              <div class="kpi-subtext font-mono">
-                <span class="text-danger">1 OUT OF STOCK</span>
-                <span>// 2 BELOW SAFETY</span>
-              </div>
-            </div>
-            <div class="kpi-card-footer font-mono clickable-hint">
-              <span>FILTER INVENTORY LIST →</span>
-            </div>
-          </div>
-
-          <!-- KPI 4: Gross Profit -->
-          <div class="admin-kpi-card">
-            <div class="kpi-card-header font-mono">
-              <span class="kpi-code">SYS.PRF_04</span>
-              <span class="kpi-badge positive">MARGIN: 35.2%</span>
-            </div>
-            <div class="kpi-card-body">
-              <div class="kpi-label font-mono">ESTIMATED GROSS PROFIT</div>
-              <div class="kpi-value font-mono" id="kpi-gross-profit">$1,724.80</div>
-              <div class="kpi-subtext font-mono">
-                <span>COGS: $3,167.70</span>
-                <span class="kpi-tag-mini">NET EST: $1,389.20</span>
-              </div>
-            </div>
-            <div class="kpi-card-footer font-mono">
-              <span class="kpi-footer-metric">MARGIN GAIN: +1.8% THIS WEEK</span>
-            </div>
-          </div>
-        </section>
 
         <!-- ==================================================== -->
-        <!-- TAB VIEW 1: SALES ANALYTICS                          -->
+        <!-- SECTION 1: DASHBOARD OVERVIEW                        -->
         <!-- ==================================================== -->
-        <section id="view-analytics" class="admin-tab-view active">
-          <!-- Interactive Filter Bar -->
-          <div class="admin-filter-panel font-mono">
-            <div class="filter-panel-header">
-              <div class="filter-header-left">
-                <span class="filter-icon">⚙</span>
-                <span class="filter-title">ANALYTICS QUERY FILTERS</span>
-                <span class="hud-pill">[REALTIME_AGG]</span>
+        <section id="view-dashboard" class="admin-tab-view active">
+          <!-- 4 Primary KPI Cards -->
+          <div class="kpi-grid-4">
+            <!-- Card 1: Total Products -->
+            <div class="kpi-card">
+              <div class="kpi-card-top">
+                <div class="kpi-icon-wrap kpi-icon-blue">📦</div>
+                <span class="kpi-badge info" id="dash-badge-skus">10 Active SKUs</span>
               </div>
-              <button id="btn-reset-filters" class="admin-btn-link font-mono">[ RESET ALL FILTERS ]</button>
+              <div class="kpi-label">Total Products</div>
+              <div class="kpi-value" id="dash-total-products">10</div>
+              <div class="kpi-subtext">
+                <span>Active in catalog:</span>
+                <span class="highlight" id="dash-catalog-active">10 items</span>
+              </div>
             </div>
 
-            <div class="filter-panel-controls">
-              <!-- Date Range Selector -->
-              <div class="filter-control-group">
-                <label for="filter-date-preset" class="control-label">DATE RANGE:</label>
-                <div class="filter-date-pills">
-                  <button class="date-pill active" data-preset="today">TODAY</button>
-                  <button class="date-pill" data-preset="yesterday">YESTERDAY</button>
-                  <button class="date-pill" data-preset="7d">LAST 7D</button>
-                  <button class="date-pill" data-preset="30d">LAST 30D</button>
-                  <button class="date-pill" data-preset="month">THIS MONTH</button>
-                </div>
+            <!-- Card 2: Available Stock -->
+            <div class="kpi-card">
+              <div class="kpi-card-top">
+                <div class="kpi-icon-wrap kpi-icon-green">✅</div>
+                <span class="kpi-badge success" id="dash-badge-available">Available Stock</span>
               </div>
-
-              <!-- Custom Date Range -->
-              <div class="filter-control-group">
-                <label class="control-label">CUSTOM RANGE:</label>
-                <div class="custom-date-inputs">
-                  <input type="date" id="filter-date-start" class="admin-input-date" value="2026-10-21" />
-                  <span class="date-sep">TO</span>
-                  <input type="date" id="filter-date-end" class="admin-input-date" value="2026-10-21" />
-                  <button id="btn-apply-custom-date" class="admin-btn-dark-sm">APPLY</button>
-                </div>
+              <div class="kpi-label">Available Stock</div>
+              <div class="kpi-value" id="dash-available-stock">232</div>
+              <div class="kpi-subtext">
+                <span id="dash-stock-breakdown">Physical: 232 | Reserved: 0</span>
               </div>
+            </div>
 
-              <!-- Product Category Filter -->
-              <div class="filter-control-group">
-                <label for="filter-category" class="control-label">CATEGORY:</label>
-                <select id="filter-category" class="admin-select">
-                  <option value="ALL">ALL CATEGORIES</option>
-                  <option value="Electronics">ELECTRONICS</option>
-                  <option value="Accessories">ACCESSORIES</option>
-                  <option value="Snacks">SNACKS</option>
-                  <option value="Beverages">BEVERAGES</option>
-                </select>
+            <!-- Card 3: Active Shopping Carts -->
+            <div class="kpi-card">
+              <div class="kpi-card-top">
+                <div class="kpi-icon-wrap kpi-icon-purple">🛒</div>
+                <span class="kpi-badge info" id="dash-badge-carts">Real-time RFID</span>
               </div>
-
-              <!-- Specific Product Filter -->
-              <div class="filter-control-group">
-                <label for="filter-product" class="control-label">PRODUCT SKU:</label>
-                <select id="filter-product" class="admin-select">
-                  <option value="ALL">ALL PRODUCTS (10 SKUs)</option>
-                  <!-- Populated dynamically via JS -->
-                </select>
+              <div class="kpi-label">Active Shopping Carts</div>
+              <div class="kpi-value" id="dash-active-carts">0</div>
+              <div class="kpi-subtext">
+                <span id="dash-carts-subtext">0 shoppers currently in-store</span>
               </div>
+            </div>
 
-              <!-- Granularity Selector -->
-              <div class="filter-control-group">
-                <label class="control-label">TIMELINE BUCKET:</label>
-                <div class="granularity-toggle">
-                  <button class="toggle-btn active" data-granularity="daily">DAILY</button>
-                  <button class="toggle-btn" data-granularity="weekly">WEEKLY</button>
-                  <button class="toggle-btn" data-granularity="monthly">MONTHLY</button>
-                </div>
+            <!-- Card 4: Today's Sales -->
+            <div class="kpi-card">
+              <div class="kpi-card-top">
+                <div class="kpi-icon-wrap kpi-icon-amber">💰</div>
+                <span class="kpi-badge warning" id="dash-badge-sales">Gross Sales</span>
+              </div>
+              <div class="kpi-label">Today's Sales</div>
+              <div class="kpi-value" id="dash-today-sales">$0.00</div>
+              <div class="kpi-subtext">
+                <span id="dash-orders-count">Completed Orders: 0</span>
               </div>
             </div>
           </div>
 
-          <!-- Analytics Secondary Metrics Ribbon -->
-          <div class="analytics-metrics-ribbon font-mono">
-            <div class="ribbon-metric">
-              <span class="ribbon-label">TOTAL REVENUE</span>
-              <strong class="ribbon-val" id="metric-filtered-revenue">$4,892.50</strong>
+          <!-- Today's Priorities -->
+          <div class="priorities-banner">
+            <div class="priorities-header">
+              <div class="priorities-title-group">
+                <span style="font-size: 1.2rem;">🎯</span>
+                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700;">Today's Priorities</h3>
+                <span class="priorities-badge">Action Required</span>
+              </div>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Real-time inventory intelligence alerts</span>
             </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric">
-              <span class="ribbon-label">COMPLETED TRANSACTIONS</span>
-              <strong class="ribbon-val" id="metric-filtered-orders">168</strong>
-            </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric">
-              <span class="ribbon-label">UNITS SOLD</span>
-              <strong class="ribbon-val" id="metric-filtered-units">412 UNITS</strong>
-            </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric">
-              <span class="ribbon-label">AVG BILL VALUE (AOV)</span>
-              <strong class="ribbon-val" id="metric-filtered-aov">$29.12 / ORDER</strong>
-            </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric">
-              <span class="ribbon-label">EST. GROSS PROFIT</span>
-              <strong class="ribbon-val text-accent-green" id="metric-filtered-profit">$1,724.80</strong>
-            </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric">
-              <span class="ribbon-label">GROSS MARGIN</span>
-              <strong class="ribbon-val" id="metric-filtered-margin">35.25%</strong>
-            </div>
-            <div class="ribbon-divider"></div>
-            <div class="ribbon-metric best-seller-badge">
-              <span class="ribbon-label">BEST-SELLING SKU</span>
-              <strong class="ribbon-val highlight" id="metric-best-seller">Wireless Earbuds (48 sold)</strong>
+
+            <div class="priorities-grid" id="dashboard-priorities-grid">
+              <!-- Dynamically populated priorities -->
             </div>
           </div>
 
-          <!-- Recommended Analytics Charts Grid -->
-          <div class="analytics-charts-grid">
-            <!-- Chart 1: Revenue Over Time Trend Line -->
-            <div class="hud-chart-card chart-col-wide">
-              <div class="chart-card-header font-mono">
-                <div class="chart-header-left">
-                  <span class="chart-badge">LINE_CHART // 01</span>
-                  <h3>SALES REVENUE & TRANSACTION VOLUME OVER TIME</h3>
+          <!-- Store Insights Grid -->
+          <div class="insights-grid">
+            <!-- Insight Card 1: Low Stock & Reorder Alerts -->
+            <div class="insight-card">
+              <div class="insight-card-header">
+                <div class="insight-title-group">
+                  <span>⚠️</span>
+                  <h3>Low Stock & Reorders</h3>
                 </div>
-                <div class="chart-controls">
-                  <span id="chart-timeline-mode" class="chart-mode-pill">DAILY BREAKDOWN</span>
-                  <div class="chart-view-toggles">
-                    <button id="toggle-chart-revenue" class="chart-toggle-btn active">REVENUE ($)</button>
-                    <button id="toggle-chart-orders" class="chart-toggle-btn">ORDERS (#)</button>
-                  </div>
-                </div>
+                <button class="table-btn primary" data-jump-tab="forecasting">View Forecast</button>
               </div>
-              <div class="chart-card-body">
-                <canvas id="revenueTrendChart" height="120"></canvas>
-              </div>
-              <div class="chart-card-footer font-mono">
-                <span class="chart-meta">DATA INTERVAL: REALTIME AGGREGATION</span>
-                <span class="chart-meta">PEAK REVENUE: $1,280.00 @ 14:00</span>
+              <div class="insight-list" id="insight-low-stock-list">
+                <!-- Dynamically populated -->
               </div>
             </div>
 
-            <!-- Chart 2: Category-Wise Sales Bar Chart -->
-            <div class="hud-chart-card">
-              <div class="chart-card-header font-mono">
-                <div class="chart-header-left">
-                  <span class="chart-badge">BAR_CHART // 02</span>
-                  <h3>CATEGORY-WISE SALES & REVENUE</h3>
+            <!-- Insight Card 2: Expiry & Shelf-Life Watch -->
+            <div class="insight-card">
+              <div class="insight-card-header">
+                <div class="insight-title-group">
+                  <span>⏳</span>
+                  <h3>Expiry & Smart Offers</h3>
                 </div>
-                <div class="chart-controls">
-                  <span class="chart-mode-pill">UNITS & VOLUME</span>
-                </div>
+                <button class="table-btn primary" data-jump-tab="expiry">View Offers</button>
               </div>
-              <div class="chart-card-body">
-                <canvas id="categorySalesChart" height="160"></canvas>
-              </div>
-              <div class="chart-card-footer font-mono">
-                <span class="chart-meta">LEADER: ELECTRONICS (42.4% OF TOTAL REVENUE)</span>
+              <div class="insight-list" id="insight-expiry-list">
+                <!-- Dynamically populated -->
               </div>
             </div>
 
-            <!-- Chart 3: Top-Five Products Bar Chart -->
-            <div class="hud-chart-card">
-              <div class="chart-card-header font-mono">
-                <div class="chart-header-left">
-                  <span class="chart-badge">BAR_CHART // 03</span>
-                  <h3>TOP-FIVE BEST-SELLING PRODUCTS</h3>
+            <!-- Insight Card 3: Frequently Bought Together Combos -->
+            <div class="insight-card">
+              <div class="insight-card-header">
+                <div class="insight-title-group">
+                  <span>🛍️</span>
+                  <h3>Suggested Product Combos</h3>
                 </div>
-                <div class="chart-controls">
-                  <span class="chart-mode-pill">BY GROSS VALUE</span>
-                </div>
+                <button class="table-btn primary" data-jump-tab="basket">Basket Analysis</button>
               </div>
-              <div class="chart-card-body">
-                <canvas id="topProductsChart" height="160"></canvas>
-              </div>
-              <div class="chart-card-footer font-mono">
-                <span class="chart-meta">TOP PRODUCT: WIRELESS EARBUDS ($1,919.52)</span>
+              <div class="insight-list" id="insight-combos-list">
+                <!-- Dynamically populated -->
               </div>
             </div>
 
-            <!-- Chart 4: Sales by Hour & Day of Week Distribution -->
-            <div class="hud-chart-card chart-col-wide">
-              <div class="chart-card-header font-mono">
-                <div class="chart-header-left">
-                  <span class="chart-badge">DISTRIB // 04</span>
-                  <h3>STORE TRAFFIC & SALES VELOCITY (HOURLY / DAY-OF-WEEK)</h3>
+            <!-- Insight Card 4: Recent Store Activity -->
+            <div class="insight-card">
+              <div class="insight-card-header">
+                <div class="insight-title-group">
+                  <span>📜</span>
+                  <h3>Recent Store Activity</h3>
                 </div>
-                <div class="chart-controls">
-                  <div class="chart-view-toggles">
-                    <button id="btn-distrib-hourly" class="chart-toggle-btn active">HOURLY (08:00 - 22:00)</button>
-                    <button id="btn-distrib-dow" class="chart-toggle-btn">DAY OF WEEK (MON - SUN)</button>
-                  </div>
-                </div>
+                <button class="table-btn" data-jump-tab="movements">Full Ledger</button>
               </div>
-              <div class="chart-card-body">
-                <canvas id="trafficVelocityChart" height="110"></canvas>
-              </div>
-              <div class="chart-card-footer font-mono">
-                <span class="chart-meta">PEAK RUSH HOURS: 12:00-14:00 (LUNCH) & 18:00-20:00 (EVENING)</span>
-                <span class="chart-meta">HIGHEST BASKET VALUE: SATURDAY ($34.80)</span>
+              <div class="insight-list" id="insight-activity-list">
+                <!-- Dynamically populated -->
               </div>
             </div>
           </div>
         </section>
 
         <!-- ==================================================== -->
-        <!-- TAB VIEW 2: INVENTORY MANAGEMENT                     -->
+        <!-- SECTION 2: PRODUCTS & INVENTORY                      -->
         <!-- ==================================================== -->
         <section id="view-inventory" class="admin-tab-view">
-          <!-- Inventory Table Toolbar & Action Bar -->
-          <div class="inventory-controls-panel font-mono">
-            <div class="inventory-controls-top">
-              <div class="inventory-title-group">
-                <span class="hud-pill">[INVENTORY_CONTROL]</span>
-                <h2>STOCK LEDGER & RFID ASSET REGISTRY</h2>
-                <span class="stock-total-badge" id="inv-total-skus-badge">10 PRODUCTS REGISTERED</span>
-              </div>
-
-              <!-- Quick Inventory Summary Stats Chips -->
-              <div class="inventory-summary-chips">
-                <div class="inv-chip">
-                  <span class="chip-label">ON-HAND:</span>
-                  <strong class="chip-val" id="sum-on-hand">230</strong>
-                </div>
-                <div class="inv-chip">
-                  <span class="chip-label">RESERVED IN CARTS:</span>
-                  <strong class="chip-val" id="sum-reserved">18</strong>
-                </div>
-                <div class="inv-chip chip-highlight">
-                  <span class="chip-label">NET AVAILABLE:</span>
-                  <strong class="chip-val" id="sum-available">212</strong>
-                </div>
-                <div class="inv-chip">
-                  <span class="chip-label">VALUATION:</span>
-                  <strong class="chip-val" id="sum-asset-val">$5,248.60</strong>
-                </div>
-              </div>
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Products & Inventory Management</h2>
+              <p>Physical on-hand counts, active cart reservations, net available stock, and stockout statuses.</p>
             </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn-primary" id="btn-inventory-add">+ Add Product</button>
+              <button class="btn-secondary" id="btn-inventory-restock">Receive Stock</button>
+            </div>
+          </div>
 
-            <div class="inventory-filter-bar">
-              <!-- Search box -->
-              <div class="search-box-wrapper">
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div class="search-input-wrap">
                 <span class="search-icon">🔍</span>
-                <input
-                  type="text"
-                  id="inv-search-input"
-                  placeholder="SEARCH PRODUCT NAME, ID, OR RFID TAG (e.g. Earbuds, PROD001, RF-9948)..."
-                  class="inv-search-input"
-                />
-                <button id="btn-clear-search" class="clear-search-btn hidden">✕</button>
+                <input type="text" id="inv-search-input" placeholder="Search product name, SKU, or RFID tag..." />
               </div>
 
-              <!-- Category Filter dropdown -->
-              <div class="inv-filter-select-group">
-                <label for="inv-category-filter">CATEGORY:</label>
-                <select id="inv-category-filter" class="inv-filter-select">
-                  <option value="ALL">ALL CATEGORIES</option>
-                  <option value="Electronics">ELECTRONICS</option>
-                  <option value="Accessories">ACCESSORIES</option>
-                  <option value="Snacks">SNACKS</option>
-                  <option value="Beverages">BEVERAGES</option>
+              <div class="filter-group">
+                <select id="inv-filter-category" class="filter-select">
+                  <option value="ALL">All Categories</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Accessories">Accessories</option>
+                  <option value="Snacks">Snacks</option>
+                  <option value="Beverages">Beverages</option>
+                </select>
+
+                <select id="inv-filter-status" class="filter-select">
+                  <option value="ALL">All Stock Statuses</option>
+                  <option value="In Stock">In Stock</option>
+                  <option value="Low Stock">Low Stock</option>
+                  <option value="Out of Stock">Out of Stock</option>
+                </select>
+
+                <select id="inv-sort-select" class="filter-select">
+                  <option value="available-asc">Available Stock: Low to High</option>
+                  <option value="available-desc">Available Stock: High to Low</option>
+                  <option value="name-asc">Name: A to Z</option>
+                  <option value="price-desc">Price: High to Low</option>
                 </select>
               </div>
-
-              <!-- Status Filter Dropdown (Healthy, Low Stock, Out of Stock) -->
-              <div class="inv-filter-select-group">
-                <label for="inv-status-filter">STOCK STATUS:</label>
-                <select id="inv-status-filter" class="inv-filter-select">
-                  <option value="ALL">ALL STATUSES</option>
-                  <option value="Healthy">HEALTHY</option>
-                  <option value="Low stock">LOW STOCK</option>
-                  <option value="Out of stock">OUT OF STOCK</option>
-                </select>
-              </div>
-
-              <!-- Sorting Dropdown -->
-              <div class="inv-filter-select-group">
-                <label for="inv-sort-select">SORT BY:</label>
-                <select id="inv-sort-select" class="inv-filter-select">
-                  <option value="available-asc">AVAILABLE STOCK (LOW TO HIGH)</option>
-                  <option value="available-desc">AVAILABLE STOCK (HIGH TO LOW)</option>
-                  <option value="name-asc">PRODUCT NAME (A-Z)</option>
-                  <option value="onhand-desc">PHYSICAL ON-HAND (HIGH TO LOW)</option>
-                  <option value="price-desc">SELLING PRICE (HIGH TO LOW)</option>
-                  <option value="margin-desc">PROFIT MARGIN (HIGH TO LOW)</option>
-                </select>
-              </div>
-
-              <!-- View Switcher (Table vs Card) -->
-              <div class="view-switcher-group">
-                <button id="btn-view-table" class="view-switch-btn active" title="Dense Table View">☰ TABLE</button>
-                <button id="btn-view-cards" class="view-switch-btn" title="Grid Cards View">☵ CARDS</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Inventory Table Container -->
-          <div class="inventory-table-container">
-            <table class="hud-inventory-table font-mono" id="inventory-table">
-              <thead>
-                <tr>
-                  <th class="th-sortable" data-sort="name">
-                    PRODUCT & RFID TAG <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="th-sortable text-center" data-sort="category">
-                    CATEGORY <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="th-sortable text-right" data-sort="onhand">
-                    ON HAND <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="th-sortable text-right" data-sort="reserved">
-                    RESERVED <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="th-sortable text-right" data-sort="available">
-                    AVAILABLE <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="th-sortable text-right" data-sort="price">
-                    COST / PRICE <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="text-center">
-                    REORDER / SAFETY
-                  </th>
-                  <th class="text-center">
-                    LEAD TIME
-                  </th>
-                  <th class="text-center">
-                    LAST RESTOCKED
-                  </th>
-                  <th class="th-sortable text-center" data-sort="status">
-                    STATUS <span class="sort-icon">↕</span>
-                  </th>
-                  <th class="text-center">
-                    ADMIN ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="inventory-table-body">
-                <!-- Product rows dynamically rendered by admin.js -->
-              </tbody>
-            </table>
-
-            <!-- Alternate Card Grid View (hidden by default) -->
-            <div id="inventory-card-grid" class="inventory-card-grid hidden">
-              <!-- Dynamically populated -->
             </div>
 
-            <!-- Empty Search State -->
-            <div id="inventory-empty-state" class="inventory-empty-state font-mono hidden">
-              <div class="empty-icon-box">[ 0 MATCHES ]</div>
-              <h3>NO PRODUCTS MATCH YOUR FILTER CRITERIA</h3>
-              <p>Try resetting the search query, category filter, or stock status.</p>
-              <button id="btn-clear-inv-filters" class="hud-btn-dark-sm font-mono mt-4">RESET INVENTORY FILTERS</button>
-            </div>
-          </div>
-
-          <!-- Bottom Inventory Info Callout -->
-          <div class="inventory-legend-strip font-mono">
-            <div class="legend-item">
-              <span class="status-pill status-healthy">HEALTHY</span>
-              <span>Stock level is above reorder point and safety threshold.</span>
-            </div>
-            <div class="legend-item">
-              <span class="status-pill status-low">LOW STOCK</span>
-              <span>Available stock is at or below reorder threshold. Supplier PO recommended.</span>
-            </div>
-            <div class="legend-item">
-              <span class="status-pill status-out">OUT OF STOCK</span>
-              <span>Zero units available. Customers cannot add this RFID SKU to carts.</span>
-            </div>
-            <div class="legend-meta">
-              <span>* RESERVED: Locked in active customer carts during transit before POS settlement.</span>
+            <div class="table-responsive">
+              <table class="modern-table" id="table-products">
+                <thead>
+                  <tr>
+                    <th>Product Name & ID</th>
+                    <th>RFID Tag</th>
+                    <th>Category</th>
+                    <th style="text-align:right;">Price</th>
+                    <th style="text-align:right;">Physical</th>
+                    <th style="text-align:right;">Reserved</th>
+                    <th style="text-align:right;">Available</th>
+                    <th>Stock Status</th>
+                    <th>Expiry Date</th>
+                    <th style="text-align:right;">Sales (Units)</th>
+                    <th style="text-align:center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-tbody">
+                  <!-- Populated dynamically via admin.js -->
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
 
         <!-- ==================================================== -->
-        <!-- TAB VIEW 3: STOCK MOVEMENTS & AUDIT LEDGER          -->
-        <!-- ==================================================== -->
-        <section id="view-movements" class="admin-tab-view">
-          <div class="movements-header-panel font-mono">
-            <div class="movements-title-group">
-              <span class="hud-pill">[AUDIT_LOG]</span>
-              <h2>CHRONOLOGICAL INVENTORY MOVEMENT HISTORY</h2>
-              <span class="meta-tag right">IMMUTABLE STORE AUDIT TRAIL</span>
-            </div>
-            
-            <div class="movements-filter-row">
-              <div class="filter-item">
-                <label>FILTER BY EVENT TYPE:</label>
-                <select id="movement-type-filter" class="admin-select-sm">
-                  <option value="ALL">ALL EVENT TYPES</option>
-                  <option value="RESTOCK">INCOMING RESTOCK</option>
-                  <option value="CHECKOUT">CUSTOMER CHECKOUT</option>
-                  <option value="CYCLE_COUNT">PHYSICAL CYCLE COUNT</option>
-                  <option value="DAMAGE_WRITEOFF">DAMAGE / EXPIRY WRITE-OFF</option>
-                  <option value="RESERVED_RELEASE">CART RESERVED / RELEASE</option>
-                </select>
-              </div>
-
-              <div class="filter-item">
-                <label>FILTER BY PRODUCT:</label>
-                <select id="movement-product-filter" class="admin-select-sm">
-                  <option value="ALL">ALL PRODUCTS</option>
-                </select>
-              </div>
-
-              <button id="btn-export-movements" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
-                <span>💾</span> EXPORT AUDIT LOG
-              </button>
-            </div>
-          </div>
-
-          <div class="movements-table-wrapper">
-            <table class="hud-inventory-table font-mono">
-              <thead>
-                <tr>
-                  <th>TIMESTAMP</th>
-                  <th>PRODUCT SKU & RFID</th>
-                  <th>EVENT ACTION</th>
-                  <th class="text-right">QTY DELTA</th>
-                  <th class="text-right">STOCK BEFORE → AFTER</th>
-                  <th>REFERENCE / OPERATOR</th>
-                  <th>NOTES / REASON</th>
-                </tr>
-              </thead>
-              <tbody id="movements-table-body">
-                <!-- Populated dynamically via JS -->
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- ==================================================== -->
-        <!-- TAB VIEW 4: SHOPPING SESSIONS                         -->
+        <!-- SECTION 3: SHOPPING CARTS & SESSIONS                 -->
         <!-- ==================================================== -->
         <section id="view-sessions" class="admin-tab-view">
-          <div class="movements-header-panel font-mono">
-            <div class="movements-title-group">
-              <span class="hud-pill">[SESSION_MGMT]</span>
-              <h2>SHOPPING SESSION MANAGEMENT</h2>
-              <span class="meta-tag right">RFID CART SESSIONS</span>
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Active Shopping Carts & Sessions</h2>
+              <p>Monitor live shopper RFID scans, cart items, inventory reservations, and checkout status.</p>
             </div>
+            <button class="btn-secondary" id="btn-refresh-sessions">🔄 Refresh Sessions</button>
+          </div>
 
-            <div class="movements-filter-row">
-              <div class="filter-item">
-                <label>FILTER BY STATUS:</label>
-                <select id="session-status-filter" class="admin-select-sm">
-                  <option value="ALL">ALL SESSIONS</option>
-                  <option value="active">ACTIVE</option>
-                  <option value="completed">COMPLETED</option>
-                  <option value="cancelled">CANCELLED</option>
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div style="font-weight: 600; font-size: 0.9rem;">Live In-Store RFID Sessions</div>
+              <div class="filter-group">
+                <select id="session-filter-status" class="filter-select">
+                  <option value="ALL">All Sessions</option>
+                  <option value="active">Active In-Store</option>
+                  <option value="completed">Completed Checkout</option>
                 </select>
               </div>
-              <button id="btn-refresh-sessions" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
-                <span>🔄</span> REFRESH SESSIONS
-              </button>
+            </div>
+
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Session ID</th>
+                    <th>Cart Hardware ID</th>
+                    <th>Shopper / Customer</th>
+                    <th>Status</th>
+                    <th>Started At</th>
+                    <th style="text-align:right;">Items Count</th>
+                    <th style="text-align:right;">Subtotal</th>
+                    <th style="text-align:center;">Cart Items</th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- SECTION 4: SALES & ORDERS                            -->
+        <!-- ==================================================== -->
+        <section id="view-sales" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Sales & Order History</h2>
+              <p>Completed transactions, line item revenue, receipts, and order metrics.</p>
             </div>
           </div>
 
-          <!-- Sessions Summary Chips -->
-          <div class="inventory-summary-chips" style="padding: 0 16px 12px;">
-            <div class="inv-chip">
-              <span class="chip-label">TOTAL:</span>
-              <strong class="chip-val" id="sessions-total-count">0</strong>
+          <div class="kpi-grid-4">
+            <div class="kpi-card">
+              <div class="kpi-label">Total Completed Revenue</div>
+              <div class="kpi-value" id="sales-kpi-revenue">$0.00</div>
+              <div class="kpi-subtext">Verified database settlements</div>
             </div>
-            <div class="inv-chip chip-highlight">
-              <span class="chip-label">ACTIVE:</span>
-              <strong class="chip-val" id="sessions-active-count">0</strong>
+            <div class="kpi-card">
+              <div class="kpi-label">Total Completed Orders</div>
+              <div class="kpi-value" id="sales-kpi-orders">0</div>
+              <div class="kpi-subtext">0 cart checkout failures</div>
             </div>
-            <div class="inv-chip">
-              <span class="chip-label">COMPLETED:</span>
-              <strong class="chip-val" id="sessions-completed-count">0</strong>
+            <div class="kpi-card">
+              <div class="kpi-label">Average Order Value</div>
+              <div class="kpi-value" id="sales-kpi-aov">$0.00</div>
+              <div class="kpi-subtext">Revenue per transaction</div>
             </div>
-            <div class="inv-chip">
-              <span class="chip-label">CANCELLED:</span>
-              <strong class="chip-val" id="sessions-cancelled-count">0</strong>
+            <div class="kpi-card">
+              <div class="kpi-label">Total Units Sold</div>
+              <div class="kpi-value" id="sales-kpi-units">0</div>
+              <div class="kpi-subtext">Across all product categories</div>
             </div>
           </div>
 
-          <div class="movements-table-wrapper">
-            <table class="hud-inventory-table font-mono">
-              <thead>
-                <tr>
-                  <th>SESSION ID</th>
-                  <th>CART ID</th>
-                  <th>STATUS</th>
-                  <th class="text-right">ITEMS</th>
-                  <th class="text-right">SUBTOTAL</th>
-                  <th>STARTED AT</th>
-                  <th>ENDED AT</th>
-                  <th>SALE ID</th>
-                  <th class="text-center">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody id="sessions-table-body">
-                <!-- Populated dynamically via JS -->
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Session Detail Drawer -->
-          <div id="session-detail-panel" class="admin-detail-panel hidden font-mono">
-            <div class="admin-modal-header">
-              <div class="modal-header-title">
-                <span class="modal-icon">🛒</span>
-                <h3 id="session-detail-title">SESSION DETAILS</h3>
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div style="font-weight: 600; font-size: 0.9rem;">Completed Sales Ledger</div>
+              <div class="filter-group">
+                <input type="date" id="sales-start-date" class="filter-select" />
+                <span>to</span>
+                <input type="date" id="sales-end-date" class="filter-select" />
+                <button id="btn-apply-sales-filter" class="table-btn primary">Apply Filter</button>
               </div>
-              <button class="modal-close-btn" id="btn-close-session-detail">✕</button>
             </div>
-            <div class="drawer-body">
-              <div class="drawer-telemetry-banner">
-                <div class="telemetry-item">
-                  <span class="label">SESSION:</span>
-                  <strong id="sess-detail-id">—</strong>
+
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Sale ID</th>
+                    <th>Date & Time</th>
+                    <th>Session ID</th>
+                    <th style="text-align:right;">Items</th>
+                    <th style="text-align:right;">Subtotal</th>
+                    <th style="text-align:right;">Tax</th>
+                    <th style="text-align:right;">Total Amount</th>
+                    <th>Status</th>
+                    <th style="text-align:center;">Receipt Details</th>
+                  </tr>
+                </thead>
+                <tbody id="sales-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- SECTION 5: EXPIRY & SMART OFFERS                     -->
+        <!-- ==================================================== -->
+        <section id="view-expiry" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Expiry Tracking & Smart Offers</h2>
+              <p>Monitor shelf-life risks, batch numbers, days until expiry, and dynamic discount recommendations.</p>
+            </div>
+            <button class="btn-primary" id="btn-create-custom-promo">+ Create Promotion Offer</button>
+          </div>
+
+          <!-- Summary Alert Banner -->
+          <div class="priorities-banner" style="background:#fffbeb; border-color:#fde68a; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">💡</span>
+                <div>
+                  <h4 style="margin: 0 0 4px 0; color: #92400e; font-size: 0.95rem;">Smart Offer Engine</h4>
+                  <p style="margin: 0; color: #b45309; font-size: 0.82rem;">
+                    For non-expired inventory nearing expiry, the system recommends clearance discounts based on stock velocity to recover revenue before obsolescence.
+                  </p>
                 </div>
-                <div class="telemetry-item">
-                  <span class="label">CART:</span>
-                  <strong id="sess-detail-cart">—</strong>
+              </div>
+              <span id="expiry-risk-badge" class="kpi-badge warning">1 Product at Risk</span>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div class="filter-group">
+                <button class="subnav-tab active" data-expiry-filter="ALL">All Batches</button>
+                <button class="subnav-tab" data-expiry-filter="expiring_7d">Expiring in 7 Days</button>
+                <button class="subnav-tab" data-expiry-filter="expiring_30d">Expiring in 30 Days</button>
+                <button class="subnav-tab" data-expiry-filter="expired">Expired</button>
+                <button class="subnav-tab" data-expiry-filter="healthy">Healthy Shelf-Life</button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Product Name & ID</th>
+                    <th>Batch / Lot Number</th>
+                    <th>Expiry Date</th>
+                    <th>Days Until Expiry</th>
+                    <th style="text-align:right;">Quantity at Risk</th>
+                    <th>Shelf Status</th>
+                    <th>Recommended Action</th>
+                    <th style="text-align:center;">Smart Offer Action</th>
+                  </tr>
+                </thead>
+                <tbody id="expiry-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- SECTION 6: DEMAND FORECASTING                        -->
+        <!-- ==================================================== -->
+        <section id="view-forecasting" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Demand Forecasting & Automatic Reorder Recommendations</h2>
+              <p>Transparent sales velocity calculations, estimated days to stockout, and target inventory coverage replenishment.</p>
+            </div>
+            <div class="filter-group">
+              <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Analysis Window:</span>
+              <select id="forecast-window-select" class="filter-select">
+                <option value="7">Last 7 Days Velocity</option>
+                <option value="14">Last 14 Days Velocity</option>
+                <option value="30" selected>Last 30 Days Velocity</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Formula Info Card -->
+          <div class="priorities-banner" style="background:#eff6ff; border-color:#bfdbfe; margin-bottom: 20px;">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+              <span style="font-size: 1.4rem;">📐</span>
+              <div>
+                <h4 style="margin: 0 0 4px 0; color: #1e40af; font-size: 0.95rem;">Transparent Forecasting Methodology</h4>
+                <p style="margin: 0; color: #1d4ed8; font-size: 0.8rem; line-height: 1.5;">
+                  <strong>Average Daily Sales</strong> = Units Sold / Period Days &nbsp;|&nbsp;
+                  <strong>Days to Stockout</strong> = Available Stock / Daily Sales &nbsp;|&nbsp;
+                  <strong>Suggested Reorder Quantity</strong> = Max(0, Target Stock Level - Available Stock), where Target Stock Level = (Daily Sales &times; (Lead Time + Target Coverage Days)) + Safety Stock.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div style="font-weight: 600; font-size: 0.9rem;">Product Demand Velocity & Reorder Table</div>
+              <div class="filter-group">
+                <select id="forecast-filter-class" class="filter-select">
+                  <option value="ALL">All Classifications</option>
+                  <option value="Critical Stockout Risk">Critical Stockout Risk</option>
+                  <option value="Low Stock">Low Stock</option>
+                  <option value="Fast Moving">Fast Moving</option>
+                  <option value="Slow Moving">Slow Moving / Overstocked</option>
+                  <option value="Balanced Demand">Balanced Demand</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Product Name & SKU</th>
+                    <th style="text-align:right;">Available</th>
+                    <th style="text-align:right;">Units Sold (30d)</th>
+                    <th style="text-align:right;">Daily Demand</th>
+                    <th style="text-align:right;">Days Remaining</th>
+                    <th>Estimated Stockout</th>
+                    <th style="text-align:right;">Target Stock</th>
+                    <th style="text-align:right;">Suggested Reorder</th>
+                    <th>Demand Status</th>
+                    <th>Recommendation Reason</th>
+                    <th style="text-align:center;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="forecast-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- SECTION 7: MARKET BASKET ANALYSIS                    -->
+        <!-- ==================================================== -->
+        <section id="view-basket" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Market Basket Analysis & Product Combos</h2>
+              <p>Discover product affinities across completed transactions using Support, Confidence, and Lift algorithms.</p>
+            </div>
+            <div class="filter-group">
+              <span id="basket-dataset-badge" class="kpi-badge info">Production Transactions</span>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="priorities-banner" style="background:#f5f3ff; border-color:#ddd6fe; margin-bottom: 20px;">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+              <span style="font-size: 1.4rem;">🛍️</span>
+              <div>
+                <h4 style="margin: 0 0 4px 0; color: #5b21b6; font-size: 0.95rem;">Association Rule Definitions</h4>
+                <p style="margin: 0; color: #6d28d9; font-size: 0.8rem; line-height: 1.5;">
+                  <strong>Support(A, B)</strong> = Transactions with both A & B / Total Transactions &nbsp;|&nbsp;
+                  <strong>Confidence(A &rarr; B)</strong> = Transactions with A & B / Transactions with A &nbsp;|&nbsp;
+                  <strong>Lift(A, B)</strong> = Support(A, B) / (Support(A) &times; Support(B)). A Lift &gt; 1.0 indicates products are purchased together significantly more often than random chance.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Suggested Combos Grid -->
+          <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0 0 14px 0;">Top Recommended Product Combos</h3>
+          <div class="combos-grid" id="market-basket-combos-grid">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Association Rules Table -->
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div style="font-weight: 600; font-size: 0.9rem;">Product Co-Occurrence Matrix</div>
+              <div class="filter-group">
+                <select id="basket-sort-select" class="filter-select">
+                  <option value="lift-desc">Sort by Lift (Association Strength)</option>
+                  <option value="count-desc">Sort by Transaction Co-Occurrence</option>
+                  <option value="confidence-desc">Sort by Confidence</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Product A</th>
+                    <th>Product B</th>
+                    <th style="text-align:right;">Co-Occurrences</th>
+                    <th style="text-align:right;">Support</th>
+                    <th style="text-align:right;">Confidence (A&rarr;B)</th>
+                    <th style="text-align:right;">Lift Multiplier</th>
+                    <th>Merchandising Recommendation</th>
+                  </tr>
+                </thead>
+                <tbody id="basket-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================== -->
+        <!-- SECTION 8: REPORTS & ANALYTICS                       -->
+        <!-- ==================================================== -->
+        <section id="view-reports" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Reports & Analytics Console</h2>
+              <p>Visual intelligence across Sales Trends, Inventory Distribution, Expiry Risks, and Market Baskets.</p>
+            </div>
+            <div class="filter-group">
+              <button class="subnav-tab active" data-report-tab="sales">Sales Analytics</button>
+              <button class="subnav-tab" data-report-tab="inventory">Inventory Analytics</button>
+              <button class="subnav-tab" data-report-tab="expiry">Expiry & Offers</button>
+              <button class="subnav-tab" data-report-tab="basket">Market Basket</button>
+            </div>
+          </div>
+
+          <!-- Reports Tab 1: Sales Analytics -->
+          <div id="reports-tab-sales" class="reports-tab-content">
+            <div class="charts-grid-2">
+              <!-- Chart 1: Daily Sales Revenue -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">1. Daily Sales Revenue Trend</h4>
+                    <p class="chart-card-subtitle">Gross revenue over time from verified checkout settlements</p>
+                  </div>
                 </div>
-                <div class="telemetry-item">
-                  <span class="label">STATUS:</span>
-                  <strong id="sess-detail-status">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">STARTED:</span>
-                  <strong id="sess-detail-started">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">ENDED:</span>
-                  <strong id="sess-detail-ended">—</strong>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-daily-revenue"></canvas>
                 </div>
               </div>
 
-              <div class="drawer-spec-panel">
-                <div class="spec-panel-header">CART ITEMS</div>
-                <div class="drawer-mini-table-wrap">
-                  <table class="hud-inventory-table mini font-mono">
-                    <thead>
-                      <tr>
-                        <th>PRODUCT</th>
-                        <th>CATEGORY</th>
-                        <th class="text-right">QTY</th>
-                        <th class="text-right">UNIT PRICE</th>
-                        <th class="text-right">SUBTOTAL</th>
-                      </tr>
-                    </thead>
-                    <tbody id="sess-detail-items-tbody">
-                    </tbody>
-                  </table>
+              <!-- Chart 2: Units Sold Over Time -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">2. Units Sold Over Time</h4>
+                    <p class="chart-card-subtitle">Total volume of physical items purchased</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-units-sold"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 3: Revenue by Product -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">3. Revenue by Product</h4>
+                    <p class="chart-card-subtitle">Monetary contribution by individual SKU</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-revenue-by-prod"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 4: Best-Selling Products -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">4. Best-Selling Products (Units)</h4>
+                    <p class="chart-card-subtitle">Top volume drivers in customer shopping sessions</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-best-sellers"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 5: Sales by Category -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">5. Sales Breakdown by Category</h4>
+                    <p class="chart-card-subtitle">Category revenue share</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-sales-by-cat"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 6: Average Order Value -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">6. Average Order Value (AOV)</h4>
+                    <p class="chart-card-subtitle">Basket size trend per customer cart</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-aov-trend"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reports Tab 2: Inventory Analytics -->
+          <div id="reports-tab-inventory" class="reports-tab-content hidden">
+            <div class="charts-grid-2">
+              <!-- Chart 7: Current Stock by Product -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">7. Current Stock by Product</h4>
+                    <p class="chart-card-subtitle">Total units currently in store inventory</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-stock-by-prod"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 8: Physical vs Reserved vs Available -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">8. Inventory Triad: Physical, Reserved & Available</h4>
+                    <p class="chart-card-subtitle">Active reservations in customer carts vs physical stock</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-inventory-triad"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 9: Stock Health Distribution -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">9. Stock Health Status</h4>
+                    <p class="chart-card-subtitle">In-Stock vs Low-Stock vs Out-of-Stock SKUs</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-stock-health"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 10: Inventory Movements by Action -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">10. Inventory Operations Volume</h4>
+                    <p class="chart-card-subtitle">Restocks, Checkouts, Adjustments, and Write-offs</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-movements-by-action"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 11: Stockout Risk / Days of Supply -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">11. Stockout Risk: Estimated Days of Supply</h4>
+                    <p class="chart-card-subtitle">Ranked by fewest days remaining before depletion</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-days-of-supply"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 12: Reorder Recommendations -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">12. Suggested Reorder Quantities</h4>
+                    <p class="chart-card-subtitle">Recommended replenishment units to restore coverage target</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-reorder-quantities"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reports Tab 3: Expiry & Offers -->
+          <div id="reports-tab-expiry" class="reports-tab-content hidden">
+            <div class="charts-grid-2">
+              <!-- Chart 13: Expiry Status Breakdown -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">13. Batches by Expiry Status</h4>
+                    <p class="chart-card-subtitle">Distribution across 7d, 30d, healthy, and expired</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-expiry-status"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 14: Quantity at Risk -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">14. Quantity at Risk from Imminent Expiry</h4>
+                    <p class="chart-card-subtitle">Units approaching shelf-life expiration</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-qty-at-risk"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reports Tab 4: Market Basket Analytics -->
+          <div id="reports-tab-basket" class="reports-tab-content hidden">
+            <div class="charts-grid-2">
+              <!-- Chart 16: Top Paired Products -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">16. Most Frequently Paired Products</h4>
+                    <p class="chart-card-subtitle">Transactions containing both items</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-paired-products"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 17: Association Strength (Lift) -->
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">17. Product Affinity Strength (Lift Multiplier)</h4>
+                    <p class="chart-card-subtitle">Statistical lift over independent purchase probability</p>
+                  </div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="chart-lift-strength"></canvas>
                 </div>
               </div>
             </div>
@@ -732,125 +897,54 @@
         </section>
 
         <!-- ==================================================== -->
-        <!-- TAB VIEW 5: SALES HISTORY                             -->
+        <!-- SECTION 9: INVENTORY HISTORY                         -->
         <!-- ==================================================== -->
-        <section id="view-sales" class="admin-tab-view">
-          <div class="movements-header-panel font-mono">
-            <div class="movements-title-group">
-              <span class="hud-pill">[SALES_LEDGER]</span>
-              <h2>COMPLETED SALES TRANSACTION HISTORY</h2>
-              <span class="meta-tag right">POS SETTLEMENT RECORDS</span>
-            </div>
-
-            <div class="movements-filter-row">
-              <div class="filter-item">
-                <label>FROM:</label>
-                <input type="date" id="sales-filter-start" class="admin-input-date" />
-              </div>
-              <div class="filter-item">
-                <label>TO:</label>
-                <input type="date" id="sales-filter-end" class="admin-input-date" />
-              </div>
-              <button id="btn-apply-sales-filter" class="admin-btn-dark-sm font-mono">
-                <span>🔍</span> APPLY FILTER
-              </button>
-              <button id="btn-refresh-sales" class="admin-btn-dark-sm font-mono" style="margin-left: auto;">
-                <span>🔄</span> REFRESH SALES
-              </button>
+        <section id="view-movements" class="admin-tab-view">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Inventory History & Audit Ledger</h2>
+              <p>Auditable historical record of all stock receipts, checkouts, physical counts, and adjustments.</p>
             </div>
           </div>
 
-          <!-- Sales Summary Chips -->
-          <div class="inventory-summary-chips" style="padding: 0 16px 12px;">
-            <div class="inv-chip">
-              <span class="chip-label">TOTAL SALES:</span>
-              <strong class="chip-val" id="sales-total-count">0</strong>
-            </div>
-            <div class="inv-chip chip-highlight">
-              <span class="chip-label">TOTAL REVENUE:</span>
-              <strong class="chip-val" id="sales-total-revenue">$0.00</strong>
-            </div>
-            <div class="inv-chip">
-              <span class="chip-label">TOTAL TAX:</span>
-              <strong class="chip-val" id="sales-total-tax">$0.00</strong>
-            </div>
-          </div>
-
-          <div class="movements-table-wrapper">
-            <table class="hud-inventory-table font-mono">
-              <thead>
-                <tr>
-                  <th>SALE ID</th>
-                  <th>SESSION ID</th>
-                  <th class="text-right">ITEMS</th>
-                  <th class="text-right">SUBTOTAL</th>
-                  <th class="text-right">TAX</th>
-                  <th class="text-right">TOTAL</th>
-                  <th>COMPLETED AT</th>
-                  <th class="text-center">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody id="sales-table-body">
-                <!-- Populated dynamically via JS -->
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Sale Detail Drawer -->
-          <div id="sale-detail-panel" class="admin-detail-panel hidden font-mono">
-            <div class="admin-modal-header">
-              <div class="modal-header-title">
-                <span class="modal-icon">💰</span>
-                <h3 id="sale-detail-title">SALE DETAILS</h3>
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="mov-search-input" placeholder="Filter by product name, movement ID, or PO code..." />
               </div>
-              <button class="modal-close-btn" id="btn-close-sale-detail">✕</button>
+              <div class="filter-group">
+                <select id="mov-filter-action" class="filter-select">
+                  <option value="ALL">All Actions</option>
+                  <option value="RESTOCK">Restock Inbound</option>
+                  <option value="CHECKOUT">Sales Checkout</option>
+                  <option value="CYCLE_COUNT">Cycle Count</option>
+                  <option value="DAMAGE_WRITEOFF">Damage Write-Off</option>
+                  <option value="RETURN_RESTOCK">Return Restock</option>
+                </select>
+              </div>
             </div>
-            <div class="drawer-body">
-              <div class="drawer-telemetry-banner">
-                <div class="telemetry-item">
-                  <span class="label">SALE ID:</span>
-                  <strong id="sale-detail-id">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">SESSION:</span>
-                  <strong id="sale-detail-session">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">SUBTOTAL:</span>
-                  <strong id="sale-detail-subtotal">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">TAX (8.25%):</span>
-                  <strong id="sale-detail-tax">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">TOTAL:</span>
-                  <strong id="sale-detail-total" class="text-accent-green">—</strong>
-                </div>
-                <div class="telemetry-item">
-                  <span class="label">COMPLETED:</span>
-                  <strong id="sale-detail-completed">—</strong>
-                </div>
-              </div>
 
-              <div class="drawer-spec-panel">
-                <div class="spec-panel-header">LINE ITEMS</div>
-                <div class="drawer-mini-table-wrap">
-                  <table class="hud-inventory-table mini font-mono">
-                    <thead>
-                      <tr>
-                        <th>PRODUCT</th>
-                        <th>CATEGORY</th>
-                        <th class="text-right">QTY</th>
-                        <th class="text-right">UNIT PRICE</th>
-                        <th class="text-right">LINE SUBTOTAL</th>
-                      </tr>
-                    </thead>
-                    <tbody id="sale-detail-items-tbody">
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Movement ID</th>
+                    <th>Product</th>
+                    <th>RFID Tag</th>
+                    <th>Action</th>
+                    <th style="text-align:right;">Delta</th>
+                    <th style="text-align:right;">Before</th>
+                    <th style="text-align:right;">After</th>
+                    <th>Reference / PO</th>
+                    <th>Auditor / Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="movements-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -861,432 +955,500 @@
       <!-- ==================================================== -->
 
       <!-- MODAL 1: ADD / EDIT PRODUCT DETAILS -->
-      <div id="modal-product" class="admin-modal-overlay hidden">
-        <div class="admin-modal-box font-mono">
-          <div class="admin-modal-header">
-            <div class="modal-header-title">
-              <span class="modal-icon">■</span>
-              <h3 id="modal-product-title">ADD NEW PRODUCT</h3>
-            </div>
+      <div id="modal-product" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3 id="modal-product-title">Add New Product</h3>
             <button class="modal-close-btn" data-close-modal="modal-product">✕</button>
           </div>
-          <form id="form-product" class="admin-modal-form">
-            <input type="hidden" id="prod-form-is-edit" value="false" />
-            
-            <div class="modal-form-grid">
-              <!-- Product Name -->
-              <div class="form-group span-2">
-                <label for="prod-name">PRODUCT NAME *</label>
-                <input type="text" id="prod-name" required placeholder="e.g. Wireless Noise-Cancelling Earbuds" />
-              </div>
+          <form id="form-product">
+            <div class="modal-body">
+              <input type="hidden" id="prod-form-is-edit" value="false" />
+              
+              <div class="modal-form-grid">
+                <div class="form-group span-2">
+                  <label for="prod-name">Product Name *</label>
+                  <input type="text" id="prod-name" required placeholder="e.g. Wireless Noise-Cancelling Earbuds" />
+                </div>
 
-              <!-- Product ID / SKU -->
-              <div class="form-group">
-                <label for="prod-id">PRODUCT ID (SKU) *</label>
-                <input type="text" id="prod-id" required placeholder="e.g. PROD-012" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-id">Product ID (SKU) *</label>
+                  <input type="text" id="prod-id" required placeholder="e.g. PROD-012" />
+                </div>
 
-              <!-- RFID Tag UID -->
-              <div class="form-group">
-                <label for="prod-rfid">RFID TAG UID *</label>
-                <input type="text" id="prod-rfid" required placeholder="e.g. RF-991204" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-rfid">RFID Tag UID *</label>
+                  <input type="text" id="prod-rfid" required placeholder="e.g. RF991204" />
+                </div>
 
-              <!-- Category -->
-              <div class="form-group">
-                <label for="prod-category">CATEGORY *</label>
-                <select id="prod-category" required>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Accessories">Accessories</option>
-                  <option value="Snacks">Snacks</option>
-                  <option value="Beverages">Beverages</option>
-                  <option value="Fresh Produce">Fresh Produce</option>
-                </select>
-              </div>
+                <div class="form-group">
+                  <label for="prod-category">Category *</label>
+                  <select id="prod-category" required>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Snacks">Snacks</option>
+                    <option value="Beverages">Beverages</option>
+                  </select>
+                </div>
 
-              <!-- Supplier Name -->
-              <div class="form-group">
-                <label for="prod-supplier">SUPPLIER NAME *</label>
-                <input type="text" id="prod-supplier" required placeholder="e.g. Apex Global Supply" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-supplier">Supplier Name *</label>
+                  <input type="text" id="prod-supplier" required placeholder="e.g. Apex Global Ltd" />
+                </div>
 
-              <!-- Purchase Cost Price -->
-              <div class="form-group">
-                <label for="prod-cost">PURCHASE COST ($) *</label>
-                <input type="number" id="prod-cost" step="0.01" min="0" required placeholder="0.00" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-cost">Purchase Cost ($) *</label>
+                  <input type="number" id="prod-cost" step="0.01" min="0" required placeholder="0.00" />
+                </div>
 
-              <!-- Selling Retail Price -->
-              <div class="form-group">
-                <label for="prod-price">SELLING PRICE ($) *</label>
-                <input type="number" id="prod-price" step="0.01" min="0" required placeholder="0.00" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-price">Retail Selling Price ($) *</label>
+                  <input type="number" id="prod-price" step="0.01" min="0" required placeholder="0.00" />
+                </div>
 
-              <!-- Reorder Level -->
-              <div class="form-group">
-                <label for="prod-reorder">REORDER THRESHOLD (UNITS) *</label>
-                <input type="number" id="prod-reorder" min="1" required placeholder="10" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-reorder">Reorder Threshold Level *</label>
+                  <input type="number" id="prod-reorder" min="1" required value="10" />
+                </div>
 
-              <!-- Safety Stock -->
-              <div class="form-group">
-                <label for="prod-safety">SAFETY STOCK BUFFER (UNITS) *</label>
-                <input type="number" id="prod-safety" min="0" required placeholder="5" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-safety">Safety Stock Buffer *</label>
+                  <input type="number" id="prod-safety" min="0" required value="5" />
+                </div>
 
-              <!-- Supplier Lead Time -->
-              <div class="form-group">
-                <label for="prod-lead-time">SUPPLIER LEAD TIME (DAYS) *</label>
-                <input type="number" id="prod-lead-time" min="1" required placeholder="3" />
-              </div>
+                <div class="form-group">
+                  <label for="prod-lead-time">Supplier Lead Time (Days) *</label>
+                  <input type="number" id="prod-lead-time" min="1" required value="3" />
+                </div>
 
-              <!-- Initial On-Hand Stock -->
-              <div class="form-group">
-                <label for="prod-onhand">INITIAL PHYSICAL STOCK (UNITS) *</label>
-                <input type="number" id="prod-onhand" min="0" required placeholder="25" />
-              </div>
-            </div>
+                <div class="form-group">
+                  <label for="prod-target-coverage">Target Coverage (Days) *</label>
+                  <input type="number" id="prod-target-coverage" min="1" required value="14" />
+                </div>
 
-            <div class="modal-footer font-mono">
-              <button type="button" class="hud-btn-secondary" data-close-modal="modal-product">CANCEL</button>
-              <button type="submit" class="hud-btn-dark">SAVE PRODUCT RECORD</button>
-            </div>
-          </form>
-        </div>
-      </div>
+                <div class="form-group">
+                  <label for="prod-onhand">Initial Physical Stock (Units) *</label>
+                  <input type="number" id="prod-onhand" min="0" required value="20" />
+                </div>
 
-      <!-- MODAL 2: UPDATE STOCK AFTER PHYSICAL COUNT -->
-      <div id="modal-cycle-count" class="admin-modal-overlay hidden">
-        <div class="admin-modal-box font-mono">
-          <div class="admin-modal-header">
-            <div class="modal-header-title">
-              <span class="modal-icon">⚖</span>
-              <h3>PHYSICAL COUNT // CYCLE AUDIT ADJUSTMENT</h3>
-            </div>
-            <button class="modal-close-btn" data-close-modal="modal-cycle-count">✕</button>
-          </div>
-          <form id="form-cycle-count" class="admin-modal-form">
-            <p class="modal-desc">
-              Conduct a physical audit count for a shelf item. The system will compute variance delta and adjust physical on-hand inventory accordingly.
-            </p>
+                <div class="form-group">
+                  <label for="prod-expiry">Expiry Date (Optional)</label>
+                  <input type="date" id="prod-expiry" />
+                </div>
 
-            <div class="form-group">
-              <label for="count-product-select">SELECT PRODUCT FOR AUDIT *</label>
-              <select id="count-product-select" required>
-                <!-- Populated dynamically -->
-              </select>
-            </div>
-
-            <div class="modal-stock-preview-grid">
-              <div class="preview-metric">
-                <span class="label">CURRENT SYSTEM ON-HAND:</span>
-                <strong id="count-sys-onhand" class="val">20</strong>
-              </div>
-              <div class="preview-metric">
-                <span class="label">ACTIVE RESERVED IN CARTS:</span>
-                <strong id="count-sys-reserved" class="val">2</strong>
-              </div>
-              <div class="preview-metric">
-                <span class="label">CURRENT AVAILABLE:</span>
-                <strong id="count-sys-available" class="val">18</strong>
+                <div class="form-group span-2">
+                  <label for="prod-batch">Batch / Lot Number (Optional)</label>
+                  <input type="text" id="prod-batch" placeholder="e.g. LOT-2026-B102" />
+                </div>
               </div>
             </div>
 
-            <div class="form-group mt-4">
-              <label for="count-physical-input">PHYSICALLY VERIFIED ON-HAND COUNT *</label>
-              <input type="number" id="count-physical-input" min="0" required placeholder="Enter counted units on shelf" />
-            </div>
-
-            <!-- Calculated Variance -->
-            <div class="variance-callout-box">
-              <div class="variance-row">
-                <span>STOCK DISCREPANCY VARIANCE:</span>
-                <strong id="count-discrepancy-badge" class="variance-neutral">0 UNITS</strong>
-              </div>
-              <span class="variance-sub" id="count-discrepancy-sub">No variance detected</span>
-            </div>
-
-            <div class="form-group">
-              <label for="count-reason">ADJUSTMENT REASON CODE *</label>
-              <select id="count-reason" required>
-                <option value="Scheduled Cycle Count">SCHEDULED CYCLE COUNT (ROUTINE)</option>
-                <option value="Discrepancy Found on Floor">DISCREPANCY FOUND ON FLOOR</option>
-                <option value="Misplaced Stock Recovered">MISPLACED STOCK RECOVERED</option>
-                <option value="Shelf Shrinkage / Unaccounted">SHELF SHRINKAGE / UNACCOUNTED</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="count-notes">AUDITOR NOTES / OPERATOR ID</label>
-              <input type="text" id="count-notes" placeholder="e.g. AUDIT-ZONE-4 // Operator Sahil" />
-            </div>
-
-            <div class="modal-footer font-mono">
-              <button type="button" class="hud-btn-secondary" data-close-modal="modal-cycle-count">CANCEL</button>
-              <button type="submit" class="hud-btn-dark">COMMIT AUDIT ADJUSTMENT</button>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" data-close-modal="modal-product">Cancel</button>
+              <button type="submit" class="btn-primary">Save Product</button>
             </div>
           </form>
         </div>
       </div>
 
-      <!-- MODAL 3: RECORD RESTOCK OR DAMAGED ITEM -->
-      <div id="modal-restock" class="admin-modal-overlay hidden">
-        <div class="admin-modal-box font-mono">
-          <div class="admin-modal-header">
-            <div class="modal-header-title">
-              <span class="modal-icon">📥</span>
-              <h3>RECORD INVENTORY SHIPMENT OR DAMAGED WRITE-OFF</h3>
-            </div>
+      <!-- MODAL 2: RECEIVE STOCK / RESTOCK -->
+      <div id="modal-restock" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Receive Stock / Damage Adjustment</h3>
             <button class="modal-close-btn" data-close-modal="modal-restock">✕</button>
           </div>
-          <form id="form-restock" class="admin-modal-form">
-            <!-- Mode Switcher: Restock vs Damaged -->
-            <div class="restock-mode-tabs">
-              <button type="button" class="mode-tab active" data-mode="restock">📥 INCOMING SHIPMENT RESTOCK</button>
-              <button type="button" class="mode-tab" data-mode="damaged">⚠ WRITE-OFF DAMAGED / EXPIRED</button>
-            </div>
-
-            <input type="hidden" id="restock-mode" value="restock" />
-
-            <div class="form-group">
-              <label for="restock-product-select">TARGET PRODUCT *</label>
-              <select id="restock-product-select" required>
-                <!-- Populated dynamically -->
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="restock-qty" id="restock-qty-label">QUANTITY RECEIVED (UNITS) *</label>
-              <input type="number" id="restock-qty" min="1" required placeholder="e.g. 50" />
-            </div>
-
-            <div id="restock-fields-incoming" class="modal-sub-fields">
-              <div class="form-group">
-                <label for="restock-po">PURCHASE ORDER (PO) / INVOICE REF</label>
-                <input type="text" id="restock-po" placeholder="PO-2026-9844" />
+          <form id="form-restock">
+            <div class="modal-body">
+              <div style="display:flex; gap:10px; margin-bottom:16px;">
+                <button type="button" class="btn-primary" id="mode-tab-restock" style="flex:1;">📥 Inbound Delivery Restock</button>
+                <button type="button" class="btn-secondary" id="mode-tab-damaged" style="flex:1;">⚠️ Write-Off Damaged / Expired</button>
               </div>
-              <div class="form-group">
-                <label for="restock-batch">SUPPLIER LOT / BATCH NUMBER</label>
-                <input type="text" id="restock-batch" placeholder="LOT-B4401" />
-              </div>
-            </div>
 
-            <div id="restock-fields-damaged" class="modal-sub-fields hidden">
+              <input type="hidden" id="restock-mode" value="restock" />
+
               <div class="form-group">
-                <label for="damage-reason">DAMAGE CLASSIFICATION</label>
-                <select id="damage-reason">
-                  <option value="Broken in Transit / Crushed Packaging">BROKEN IN TRANSIT / PACKAGING TORN</option>
-                  <option value="Expired Product">SHELF-LIFE EXPIRED</option>
-                  <option value="RFID Tag Faulty / Missing">RFID TAG FAULTY / SENSOR REJECT</option>
-                  <option value="Spillage / Water Damaged">SPILLAGE / ENVIRONMENTAL DAMAGE</option>
+                <label for="restock-product-select">Target Product *</label>
+                <select id="restock-product-select" required>
+                  <!-- Populated dynamically -->
                 </select>
               </div>
+
+              <div class="form-group">
+                <label for="restock-qty" id="restock-qty-label">Quantity Received (Units) *</label>
+                <input type="number" id="restock-qty" min="1" required placeholder="e.g. 50" />
+              </div>
+
+              <div id="restock-fields-incoming">
+                <div class="modal-form-grid">
+                  <div class="form-group">
+                    <label for="restock-po">Purchase Order (PO) / Ref #</label>
+                    <input type="text" id="restock-po" placeholder="PO-2026-9921" />
+                  </div>
+                  <div class="form-group">
+                    <label for="restock-batch">Batch / Lot Number</label>
+                    <input type="text" id="restock-batch" placeholder="LOT-B4401" />
+                  </div>
+                  <div class="form-group span-2">
+                    <label for="restock-expiry">Batch Expiry Date</label>
+                    <input type="date" id="restock-expiry" />
+                  </div>
+                </div>
+              </div>
+
+              <div id="restock-fields-damaged" class="hidden">
+                <div class="form-group">
+                  <label for="damage-reason">Damage Reason</label>
+                  <select id="damage-reason">
+                    <option value="Broken in Transit / Packaging Damaged">Broken in Transit / Packaging Damaged</option>
+                    <option value="Shelf-Life Expired">Shelf-Life Expired</option>
+                    <option value="Sensor / RFID Tag Defective">Sensor / RFID Tag Defective</option>
+                    <option value="Spillage / Water Damage">Spillage / Environmental Damage</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="restock-notes">Audit Notes</label>
+                <input type="text" id="restock-notes" placeholder="e.g. Inbound receiving dock bay 2 verified" />
+              </div>
             </div>
 
-            <div class="form-group">
-              <label for="restock-notes">INCIDENT / AUDIT NOTES</label>
-              <input type="text" id="restock-notes" placeholder="e.g. Verified by Receiving Bay 2" />
-            </div>
-
-            <div class="modal-footer font-mono">
-              <button type="button" class="hud-btn-secondary" data-close-modal="modal-restock">CANCEL</button>
-              <button type="submit" class="hud-btn-dark" id="btn-submit-restock">RECORD SHIPMENT INVENTORY</button>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" data-close-modal="modal-restock">Cancel</button>
+              <button type="submit" class="btn-primary" id="btn-submit-restock">Confirm Stock Update</button>
             </div>
           </form>
         </div>
       </div>
 
-      <!-- MODAL 4: SET REORDER THRESHOLDS & SUPPLIER DETAILS -->
-      <div id="modal-thresholds" class="admin-modal-overlay hidden">
-        <div class="admin-modal-box font-mono">
-          <div class="admin-modal-header">
-            <div class="modal-header-title">
-              <span class="modal-icon">⚙</span>
-              <h3>SET REORDER THRESHOLDS & SUPPLIER DETAILS</h3>
+      <!-- MODAL 3: PHYSICAL COUNT / CYCLE AUDIT -->
+      <div id="modal-cycle-count" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Physical Count // Inventory Audit</h3>
+            <button class="modal-close-btn" data-close-modal="modal-cycle-count">✕</button>
+          </div>
+          <form id="form-cycle-count">
+            <div class="modal-body">
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px 0;">
+                Enter verified physical shelf count. The system will compute discrepancy delta and adjust inventory safely without violating active customer cart reservations.
+              </p>
+
+              <div class="form-group">
+                <label for="count-product-select">Select Product *</label>
+                <select id="count-product-select" required>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+
+              <div style="display:flex; gap:12px; background:var(--bg-surface-secondary); padding:12px; border-radius:var(--radius-md); margin-bottom:16px;">
+                <div style="flex:1;">
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Current On-Hand:</span>
+                  <div id="count-sys-onhand" style="font-size:1.1rem; font-weight:700;">20</div>
+                </div>
+                <div style="flex:1;">
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Reserved in Carts:</span>
+                  <div id="count-sys-reserved" style="font-size:1.1rem; font-weight:700; color:var(--color-warning-dark);">0</div>
+                </div>
+                <div style="flex:1;">
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Available:</span>
+                  <div id="count-sys-available" style="font-size:1.1rem; font-weight:700; color:var(--color-success-dark);">20</div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="count-physical-input">Physically Counted Units on Shelf *</label>
+                <input type="number" id="count-physical-input" min="0" required placeholder="Enter physically counted count" />
+              </div>
+
+              <div style="background:#f8fafc; border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <span style="font-size:0.8rem; font-weight:600;">Discrepancy Variance:</span>
+                  <div id="count-discrepancy-sub" style="font-size:0.75rem; color:var(--text-muted);">No variance detected</div>
+                </div>
+                <span id="count-discrepancy-badge" class="kpi-badge info">0 Units</span>
+              </div>
+
+              <div class="form-group">
+                <label for="count-reason">Audit Reason Code</label>
+                <select id="count-reason">
+                  <option value="Routine Floor Audit">Routine Floor Audit</option>
+                  <option value="Discrepancy Investigation">Discrepancy Investigation</option>
+                  <option value="Misplaced Stock Reconciled">Misplaced Stock Reconciled</option>
+                  <option value="Shelf Shrinkage Write-down">Shelf Shrinkage Write-down</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="count-notes">Auditor Notes</label>
+                <input type="text" id="count-notes" placeholder="e.g. Zone A aisle 4 shelf count" />
+              </div>
             </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" data-close-modal="modal-cycle-count">Cancel</button>
+              <button type="submit" class="btn-primary">Commit Audit Adjustment</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL 4: REORDER RULES CONFIGURATION -->
+      <div id="modal-thresholds" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Configure Reorder Rules</h3>
             <button class="modal-close-btn" data-close-modal="modal-thresholds">✕</button>
           </div>
-          <form id="form-thresholds" class="admin-modal-form">
-            <div class="form-group">
-              <label for="thresh-product-select">SELECT PRODUCT *</label>
-              <select id="thresh-product-select" required>
-                <!-- Populated dynamically -->
-              </select>
+          <form id="form-thresholds">
+            <div class="modal-body">
+              <div class="form-group">
+                <label for="thresh-product-select">Select Product *</label>
+                <select id="thresh-product-select" required>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+
+              <div class="modal-form-grid">
+                <div class="form-group">
+                  <label for="thresh-reorder">Low-Stock Reorder Threshold *</label>
+                  <input type="number" id="thresh-reorder" min="1" required />
+                  <span class="field-hint">Triggers Low Stock alert when available &le; this value.</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="thresh-safety">Safety Stock Buffer *</label>
+                  <input type="number" id="thresh-safety" min="0" required />
+                  <span class="field-hint">Emergency cushion against supply delays.</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="thresh-leadtime">Supplier Lead Time (Days) *</label>
+                  <input type="number" id="thresh-leadtime" min="1" required />
+                  <span class="field-hint">Days required from PO placement to delivery.</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="thresh-target-coverage">Target Stock Coverage (Days) *</label>
+                  <input type="number" id="thresh-target-coverage" min="1" required value="14" />
+                  <span class="field-hint">Days of demand to cover in replenishment.</span>
+                </div>
+
+                <div class="form-group span-2">
+                  <label for="thresh-supplier">Preferred Supplier Name *</label>
+                  <input type="text" id="thresh-supplier" required />
+                </div>
+              </div>
             </div>
 
-            <div class="modal-form-grid">
-              <div class="form-group">
-                <label for="thresh-reorder">REORDER THRESHOLD LEVEL (UNITS) *</label>
-                <input type="number" id="thresh-reorder" min="1" required />
-                <span class="field-hint">Triggers "Low Stock" alert when available &le; this level.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="thresh-safety">SAFETY STOCK BUFFER (UNITS) *</label>
-                <input type="number" id="thresh-safety" min="0" required />
-                <span class="field-hint">Emergency reserve to guard against supply shock.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="thresh-supplier">PREFERRED SUPPLIER NAME *</label>
-                <input type="text" id="thresh-supplier" required />
-              </div>
-
-              <div class="form-group">
-                <label for="thresh-leadtime">SUPPLIER LEAD TIME (DAYS) *</label>
-                <input type="number" id="thresh-leadtime" min="1" required />
-                <span class="field-hint">Days needed from order placement to bay delivery.</span>
-              </div>
-            </div>
-
-            <div class="modal-footer font-mono">
-              <button type="button" class="hud-btn-secondary" data-close-modal="modal-thresholds">CANCEL</button>
-              <button type="submit" class="hud-btn-dark">UPDATE THRESHOLD RULES</button>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" data-close-modal="modal-thresholds">Cancel</button>
+              <button type="submit" class="btn-primary">Save Reorder Rules</button>
             </div>
           </form>
         </div>
       </div>
 
-      <!-- DRAWER / MODAL 5: PRODUCT 360 DETAIL VIEW -->
-      <div id="modal-product-detail" class="admin-modal-overlay hidden">
-        <div class="admin-drawer-box font-mono">
-          <div class="admin-modal-header">
-            <div class="modal-header-title">
-              <span class="modal-icon">👁</span>
-              <h3 id="detail-product-name">WIRELESS EARBUDS</h3>
-              <span id="detail-product-status" class="status-pill status-healthy">HEALTHY</span>
+      <!-- MODAL 5: PRODUCT 360 DRAWER -->
+      <div id="modal-product-detail" class="modal-overlay hidden">
+        <div class="drawer-box">
+          <div class="modal-header">
+            <div>
+              <h3 id="detail-product-name" style="margin: 0 0 4px 0;">Product Detail</h3>
+              <span id="detail-product-status" class="status-pill status-healthy">In Stock</span>
             </div>
             <button class="modal-close-btn" data-close-modal="modal-product-detail">✕</button>
           </div>
 
-          <div class="drawer-body">
-            <!-- Top Telemetry Strip -->
-            <div class="drawer-telemetry-banner">
-              <div class="telemetry-item">
-                <span class="label">SKU ID:</span>
-                <strong id="detail-product-id">PROD-004</strong>
+          <div class="modal-body">
+            <!-- Telemetry strip -->
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; background:var(--bg-surface-secondary); padding:14px; border-radius:var(--radius-md); margin-bottom:20px;">
+              <div>
+                <span style="font-size:0.75rem; color:var(--text-muted);">SKU ID:</span>
+                <div id="detail-product-id" style="font-weight:700;">PROD-004</div>
               </div>
-              <div class="telemetry-item">
-                <span class="label">RFID TAG UID:</span>
-                <strong id="detail-product-rfid" class="rfid-tag-mono">RF-994821</strong>
+              <div>
+                <span style="font-size:0.75rem; color:var(--text-muted);">RFID Tag:</span>
+                <div id="detail-product-rfid" style="font-family:var(--font-mono); font-size:0.85rem;">RF994821</div>
               </div>
-              <div class="telemetry-item">
-                <span class="label">CATEGORY:</span>
-                <strong id="detail-product-cat">Electronics</strong>
+              <div>
+                <span style="font-size:0.75rem; color:var(--text-muted);">Category:</span>
+                <div id="detail-product-cat" style="font-weight:600;">Electronics</div>
               </div>
-              <div class="telemetry-item">
-                <span class="label">SUPPLIER:</span>
-                <strong id="detail-product-supplier">Apex Audio Ltd</strong>
-              </div>
-            </div>
-
-            <!-- Stock Triad Breakdown -->
-            <div class="stock-triad-grid">
-              <div class="stock-triad-card">
-                <span class="triad-label">PHYSICAL ON-HAND</span>
-                <h2 id="detail-onhand" class="triad-val">20</h2>
-                <span class="triad-sub">Counted in stockroom & shelves</span>
-              </div>
-
-              <div class="stock-triad-card">
-                <span class="triad-label">RESERVED IN CARTS</span>
-                <h2 id="detail-reserved" class="triad-val text-warning">2</h2>
-                <span class="triad-sub">Active in shopper carts right now</span>
-              </div>
-
-              <div class="stock-triad-card highlight">
-                <span class="triad-label">NET AVAILABLE</span>
-                <h2 id="detail-available" class="triad-val text-accent-green">18</h2>
-                <span class="triad-sub">Available for new shoppers to grab</span>
+              <div>
+                <span style="font-size:0.75rem; color:var(--text-muted);">Supplier:</span>
+                <div id="detail-product-supplier" style="font-weight:600;">Apex Audio</div>
               </div>
             </div>
 
-            <!-- Economics & Margins Card -->
-            <div class="drawer-spec-panel">
-              <div class="spec-panel-header">FINANCIAL METRICS & UNIT ECONOMICS</div>
-              <div class="spec-panel-grid">
-                <div class="spec-row">
-                  <span class="spec-lbl">UNIT PURCHASE COST:</span>
-                  <strong id="detail-cost" class="spec-v">$22.50</strong>
+            <!-- Stock Triad -->
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:20px;">
+              <div style="border:1px solid var(--border-subtle); padding:16px; border-radius:var(--radius-md); text-align:center;">
+                <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Physical On-Hand</span>
+                <div id="detail-onhand" style="font-size:1.8rem; font-weight:800; color:var(--text-primary);">20</div>
+              </div>
+              <div style="border:1px solid var(--border-subtle); padding:16px; border-radius:var(--radius-md); text-align:center;">
+                <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Reserved in Carts</span>
+                <div id="detail-reserved" style="font-size:1.8rem; font-weight:800; color:var(--color-warning-dark);">0</div>
+              </div>
+              <div style="border:1px solid var(--color-success-border); background:var(--color-success-bg); padding:16px; border-radius:var(--radius-md); text-align:center;">
+                <span style="font-size:0.75rem; color:var(--color-success-dark); font-weight:600; text-transform:uppercase;">Net Available</span>
+                <div id="detail-available" style="font-size:1.8rem; font-weight:800; color:var(--color-success-dark);">20</div>
+              </div>
+            </div>
+
+            <!-- Economics & Pricing -->
+            <div style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px; margin-bottom:20px;">
+              <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">Economics & Pricing</h4>
+              <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Purchase Cost:</span>
+                  <div id="detail-cost" style="font-weight:700;">$0.00</div>
                 </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">RETAIL SELLING PRICE:</span>
-                  <strong id="detail-price" class="spec-v">$39.99</strong>
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Selling Price:</span>
+                  <div id="detail-price" style="font-weight:700;">$0.00</div>
                 </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">GROSS PROFIT PER UNIT:</span>
-                  <strong id="detail-unit-profit" class="spec-v text-accent-green">$17.49</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">PROFIT MARGIN:</span>
-                  <strong id="detail-margin" class="spec-v">43.74%</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">TOTAL ON-HAND ASSET VALUE:</span>
-                  <strong id="detail-asset-val" class="spec-v">$799.80</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">TOTAL REPLACEMENT COST:</span>
-                  <strong id="detail-asset-cost" class="spec-v">$450.00</strong>
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Gross Profit Margin:</span>
+                  <div id="detail-margin" style="font-weight:700; color:var(--color-success);">0.0%</div>
                 </div>
               </div>
             </div>
 
-            <!-- Replenishment & Supply Chain Rules -->
-            <div class="drawer-spec-panel">
-              <div class="spec-panel-header">REPLENISHMENT & SUPPLY RULES</div>
-              <div class="spec-panel-grid">
-                <div class="spec-row">
-                  <span class="spec-lbl">REORDER THRESHOLD:</span>
-                  <strong id="detail-reorder" class="spec-v">10 Units</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">SAFETY STOCK BUFFER:</span>
-                  <strong id="detail-safety" class="spec-v">5 Units</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">SUPPLIER LEAD TIME:</span>
-                  <strong id="detail-leadtime" class="spec-v">3 Days</strong>
-                </div>
-                <div class="spec-row">
-                  <span class="spec-lbl">LAST RESTOCKED DATE:</span>
-                  <strong id="detail-last-restocked" class="spec-v">2026-10-18</strong>
-                </div>
-              </div>
-            </div>
-
-            <!-- Recent Movement Audit for this product -->
-            <div class="drawer-spec-panel">
-              <div class="spec-panel-header">RECENT STOCK MOVEMENT HISTORY</div>
-              <div class="drawer-mini-table-wrap">
-                <table class="hud-inventory-table mini font-mono">
-                  <thead>
-                    <tr>
-                      <th>TIMESTAMP</th>
-                      <th>ACTION</th>
-                      <th>DELTA</th>
-                      <th>BALANCE</th>
-                      <th>REF</th>
-                    </tr>
-                  </thead>
-                  <tbody id="detail-movements-tbody">
-                    <!-- Populated dynamically -->
-                  </tbody>
-                </table>
-              </div>
+            <!-- Recent Stock Movements for this product -->
+            <h4 style="margin: 0 0 10px 0; font-size: 0.95rem;">Product Movement Ledger</h4>
+            <div class="table-responsive" style="max-height: 200px;">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th style="text-align:right;">Delta</th>
+                    <th style="text-align:right;">Balance</th>
+                    <th>Ref / PO</th>
+                  </tr>
+                </thead>
+                <tbody id="detail-movements-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div class="drawer-footer font-mono">
-            <button id="btn-detail-edit" class="hud-btn-secondary">EDIT PRODUCT</button>
-            <button id="btn-detail-count" class="hud-btn-secondary">VERIFY COUNT</button>
-            <button id="btn-detail-restock" class="hud-btn-dark">RESTOCK SHIPMENT</button>
+          <div class="modal-footer">
+            <button id="btn-detail-edit" class="btn-secondary">Edit Product</button>
+            <button id="btn-detail-count" class="btn-secondary">Physical Count</button>
+            <button id="btn-detail-restock" class="btn-primary">Receive Stock</button>
           </div>
         </div>
       </div>
 
+      <!-- MODAL 6: SESSION CART ITEMS INSPECTION -->
+      <div id="modal-session-items" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3 id="session-modal-title">Cart Session Inspection</h3>
+            <button class="modal-close-btn" data-close-modal="modal-session-items">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th style="text-align:right;">Quantity</th>
+                    <th style="text-align:right;">Unit Price</th>
+                    <th style="text-align:right;">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody id="session-items-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-close-modal="modal-session-items">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 7: SALE RECEIPT LINE ITEMS -->
+      <div id="modal-sale-receipt" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3 id="sale-modal-title">Sale Receipt Details</h3>
+            <button class="modal-close-btn" data-close-modal="modal-sale-receipt">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th style="text-align:right;">Qty</th>
+                    <th style="text-align:right;">Unit Price</th>
+                    <th style="text-align:right;">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody id="sale-detail-items-tbody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-close-modal="modal-sale-receipt">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 8: CREATE / APPROVE PROMOTION -->
+      <div id="modal-promotion" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Create Promotional Discount Offer</h3>
+            <button class="modal-close-btn" data-close-modal="modal-promotion">✕</button>
+          </div>
+          <form id="form-promotion">
+            <div class="modal-body">
+              <div class="form-group">
+                <label for="promo-product-select">Target Product *</label>
+                <select id="promo-product-select" required>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="promo-discount-input">Discount Percentage (%) *</label>
+                <input type="number" id="promo-discount-input" min="1" max="90" required value="15" />
+              </div>
+
+              <div class="form-group">
+                <label for="promo-reason-input">Promotion Reason *</label>
+                <input type="text" id="promo-reason-input" required placeholder="e.g. Clearance: Batch approaching expiry in 7 days" />
+              </div>
+
+              <div class="form-group">
+                <label for="promo-expiry-input">Offer Expiry Date (Optional)</label>
+                <input type="date" id="promo-expiry-input" />
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" data-close-modal="modal-promotion">Cancel</button>
+              <button type="submit" class="btn-primary">Activate Promotion</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Toast Notification Container -->
-      <div id="admin-toast-container" class="admin-toast-container font-mono"></div>
+      <div id="admin-toast-container" class="toast-container"></div>
 
     </div>
 
