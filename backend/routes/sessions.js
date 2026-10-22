@@ -1,6 +1,8 @@
 const express = require('express');
+// Enable inventory-only demo mode via env var. Set INVENTORY_ONLY_MODE=true to bypass Razorpay verification and payment order creation.
 const router = express.Router();
 const { pool } = require('../db');
+const INVENTORY_ONLY_MODE = process.env.INVENTORY_ONLY_MODE === 'true';
 
 // POST /api/sessions - Create a new session
 router.post('/', async (req, res) => {
@@ -107,13 +109,20 @@ router.post('/:sessionId/create-order', async (req, res) => {
     const taxAmount = Math.round(subtotal * taxRate * 100);
     const total = Math.round((subtotal + taxAmount) * 100);
     const paymentService = require('../services/paymentService');
-    if (!paymentService.isConfigured()) {
-      await client.query('ROLLBACK');
-      return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
+    if (!process.env.INVENTORY_ONLY_MODE === 'true') {
+      // In production mode ensure Razorpay is configured
+      if (!paymentService.isConfigured()) {
+        await client.query('ROLLBACK');
+        return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
+      }
+      const order = await paymentService.createOrder({ amount: total, currency: 'INR', receipt: `receipt_${sessionId}` });
+      await client.query('COMMIT');
+      return res.status(200).json({ order_id: order.id, amount: order.amount, currency: order.currency });
+    } else {
+      // Inventory‑only demo mode – skip order creation and commit early
+      await client.query('COMMIT');
+      return res.status(200).json({ message: 'Demo checkout successful (payment bypassed)' });
     }
-    const order = await paymentService.createOrder({ amount: total, currency: 'INR', receipt: `receipt_${sessionId}` });
-    await client.query('COMMIT');
-    return res.status(200).json({ order_id: order.id, amount: order.amount, currency: order.currency });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating Razorpay order:', error);
@@ -141,7 +150,12 @@ router.post('/:sessionId/checkout', async (req, res) => {
     }
         // Razorpay payment verification – optional if credentials are set
     const paymentService = require('../services/paymentService');
-    if (paymentService.isConfigured()) {
+    if (!INVENTORY_ONLY_MODE) {
+      // In production mode ensure Razorpay is configured and verify payment details.
+      if (!paymentService.isConfigured()) {
+        await client.query('ROLLBACK');
+        return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
+      }
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
         await client.query('ROLLBACK');
@@ -164,6 +178,10 @@ router.post('/:sessionId/checkout', async (req, res) => {
     if (itemsRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Cart is empty, cannot checkout' });
+    }
+    // Lock each product row to prevent race conditions while updating inventory
+    for (const item of itemsRes.rows) {
+      await client.query('SELECT * FROM products WHERE product_id = $1 FOR UPDATE', [item.product_id]);
     }
     // Validate that a reservation exists for each product and deduct inventory & reserved quantities atomically
     for (const item of itemsRes.rows) {
@@ -273,19 +291,7 @@ const reservationAggRes = await client.query(
       [saleOperationId]
     );
 
-    // Decrement inventory_qty in products and log stock movement
-    for (const item of itemsRes.rows) {
-      const prodRes = await client.query('SELECT inventory_qty FROM products WHERE product_id = $1', [item.product_id]);
-      const currentQty = prodRes.rows.length > 0 ? (prodRes.rows[0].inventory_qty || 0) : 0;
-      const newQty = Math.max(0, currentQty - item.quantity);
-      await client.query('UPDATE products SET inventory_qty = $1 WHERE product_id = $2', [newQty, item.product_id]);
-      
-      const movId = `MOV_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      await client.query(`
-        INSERT INTO stock_movements (movement_id, product_id, action, delta, before_qty, after_qty, ref_code, notes)
-        VALUES ($1, $2, 'CHECKOUT', $3, $4, $5, $6, 'Customer cart checkout settlement')
-      `, [movId, item.product_id, -item.quantity, currentQty, newQty, sessionId]);
-    }
+    // Stock movement logging is handled via inventory_movements above; duplicate inventory decrement removed.
 
     // Mark session as completed
     await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
