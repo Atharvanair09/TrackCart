@@ -170,9 +170,9 @@ router.post('/:sessionId/checkout', async (req, res) => {
       const qty = item.quantity;
       const productId = item.product_id;
 
-      // Ensure a completed reservation operation exists for this session & product
-      const reservationRes = await client.query(
-        `SELECT io.id AS operation_id, im.quantity AS reserved_quantity
+      // Compute net reserved quantity for this session and product (sum reservations minus releases)
+      const reservationAggRes = await client.query(
+        `SELECT COALESCE(SUM(im.quantity), 0) AS total_reserved
          FROM inventory_operations io
          JOIN inventory_movements im ON im.operation_id = io.id
          WHERE io.operation_type = 'reservation'
@@ -182,12 +182,28 @@ router.post('/:sessionId/checkout', async (req, res) => {
          FOR UPDATE OF io, im`,
         [sessionId, productId]
       );
-      if (reservationRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: `Missing reservation for product ${productId}` });
-      }
-      const reservedQty = Number(reservationRes.rows[0].reserved_quantity);
-      if (reservedQty < qty) {
+      const releaseAggRes = await client.query(
+        `SELECT COALESCE(SUM(im.quantity), 0) AS total_released
+         FROM inventory_operations ro
+         JOIN inventory_movements im ON im.operation_id = ro.id
+         WHERE ro.operation_type = 'release'
+           AND ro.status = 'completed'
+           AND ro.reservation_operation_id IN (
+             SELECT io.id
+             FROM inventory_operations io
+             JOIN inventory_movements im ON im.operation_id = io.id
+             WHERE io.operation_type = 'reservation'
+               AND io.session_id = $1
+               AND io.status = 'completed'
+               AND im.product_id = $2
+           )
+           AND im.product_id = $2`,
+        [sessionId, productId]
+      );
+      const totalReserved = Number(reservationAggRes.rows[0].total_reserved);
+      const totalReleased = Number(releaseAggRes.rows[0].total_released);
+      const netReserved = totalReserved - totalReleased;
+      if (netReserved < qty) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Insufficient reserved quantity for product ${productId}` });
       }
