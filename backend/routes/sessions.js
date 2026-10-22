@@ -80,6 +80,48 @@ router.get('/:sessionId', async (req, res) => {
 });
 
 // POST /api/sessions/:sessionId/end - End a session
+// POST /api/sessions/:sessionId/create-order - Create Razorpay order
+router.post('/:sessionId/create-order', async (req, res) => {
+  const sessionId = req.params.sessionId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Verify session exists and is active
+    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2 FOR UPDATE', [sessionId, 'active']);
+    if (sessionRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Invalid or inactive session' });
+    }
+    const itemsRes = await client.query(
+      `SELECT ci.*, p.price FROM cart_items ci 
+       JOIN products p ON ci.product_id = p.product_id 
+       WHERE ci.session_id = $1`,
+      [sessionId]
+    );
+    if (itemsRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cart is empty' });
+    }
+    const subtotal = itemsRes.rows.reduce((sum, i) => sum + (i.unit_price_at_addition * i.quantity), 0);
+    const taxRate = 0.0825;
+    const taxAmount = Math.round(subtotal * taxRate * 100);
+    const total = Math.round((subtotal + taxAmount) * 100);
+    const paymentService = require('../services/paymentService');
+    if (!paymentService.isConfigured()) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
+    }
+    const order = await paymentService.createOrder({ amount: total, currency: 'INR', receipt: `receipt_${sessionId}` });
+    await client.query('COMMIT');
+    return res.status(200).json({ order_id: order.id, amount: order.amount, currency: order.currency });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating Razorpay order:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
 router.post('/:sessionId/checkout', async (req, res) => {
   const sessionId = req.params.sessionId;
   const client = await pool.connect();
@@ -97,6 +139,20 @@ router.post('/:sessionId/checkout', async (req, res) => {
       await client.query('COMMIT');
       return res.status(200).json(existingSale.rows[0]);
     }
+        // Razorpay payment verification – optional if credentials are set
+    const paymentService = require('../services/paymentService');
+    if (paymentService.isConfigured()) {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Missing Razorpay payment details' });
+      }
+      const isValid = paymentService.verifySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+      if (!isValid) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid Razorpay signature' });
+      }
+    }
     // Fetch cart items ordered by product_id to lock products deterministically
     const itemsRes = await client.query(
       `SELECT ci.*, p.price, p.product_id FROM cart_items ci 
@@ -109,44 +165,90 @@ router.post('/:sessionId/checkout', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Cart is empty, cannot checkout' });
     }
-    // Validate inventory for each product and deduct atomically
+    // Validate that a reservation exists for each product and deduct inventory & reserved quantities atomically
     for (const item of itemsRes.rows) {
       const qty = item.quantity;
       const productId = item.product_id;
-      // Guarded update ensures sufficient stock; rowCount === 1 means deduction succeeded
+
+      // Ensure a completed reservation operation exists for this session & product
+      const reservationRes = await client.query(
+        `SELECT io.id AS operation_id, im.quantity AS reserved_quantity
+         FROM inventory_operations io
+         JOIN inventory_movements im ON im.operation_id = io.id
+         WHERE io.operation_type = 'reservation'
+           AND io.session_id = $1
+           AND io.status = 'completed'
+           AND im.product_id = $2
+         FOR UPDATE OF io, im`,
+        [sessionId, productId]
+      );
+      if (reservationRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Missing reservation for product ${productId}` });
+      }
+      const reservedQty = Number(reservationRes.rows[0].reserved_quantity);
+      if (reservedQty < qty) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Insufficient reserved quantity for product ${productId}` });
+      }
+
+      // Decrement both inventory and reserved quantities
       const updRes = await client.query(
-        'UPDATE products SET inventory_qty = inventory_qty - $1 WHERE product_id = $2 AND inventory_qty >= $1',
+        'UPDATE products SET inventory_qty = inventory_qty - $1, reserved_qty = reserved_qty - $1 WHERE product_id = $2 AND inventory_qty >= $1 AND reserved_qty >= $1',
         [qty, productId]
       );
       if (updRes.rowCount !== 1) {
-        // Insufficient stock or product missing – abort checkout
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Insufficient stock for product ${productId}` });
       }
     }
+
     // Calculate totals after successful inventory checks
     const subtotal = itemsRes.rows.reduce((sum, i) => sum + (i.unit_price_at_addition * i.quantity), 0);
     const taxRate = 0.0825;
     const taxAmount = parseFloat((subtotal * taxRate).toFixed(2));
     const total = parseFloat((subtotal + taxAmount).toFixed(2));
     const saleId = `SALE_${Date.now()}`;
+
     // Insert sale record
     const saleInsert = await client.query(
       `INSERT INTO sales (sale_id, session_id, subtotal, tax_rate, tax_amount, total) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [saleId, sessionId, subtotal, taxRate, taxAmount, total]
     );
     const saleRecord = saleInsert.rows[0];
-    // Insert line items for each cart item
-    const lineItemPromises = itemsRes.rows.map(item => {
+
+    // Create inventory operation for the sale (pending)
+    const saleOpKey = `sale-${saleId}`;
+    const saleOpInsert = await client.query(
+      `INSERT INTO inventory_operations (operation_type, operation_key, session_id, sale_id, status) VALUES ('sale', $1, $2, $3, 'pending') RETURNING id`,
+      [saleOpKey, sessionId, saleId]
+    );
+    const saleOperationId = saleOpInsert.rows[0].id;
+
+    // Insert line items and inventory movements
+    const lineItemPromises = itemsRes.rows.map(async (item) => {
       const lineSubtotal = parseFloat((item.unit_price_at_addition * item.quantity).toFixed(2));
-      return client.query(
+      await client.query(
         `INSERT INTO sale_line_items (sale_id, product_id, quantity, unit_price, line_subtotal) VALUES ($1, $2, $3, $4, $5)`,
         [saleId, item.product_id, item.quantity, item.unit_price_at_addition, lineSubtotal]
       );
+      // Record inventory movement for sale (deduct both physical and reserved)
+      await client.query(
+        `INSERT INTO inventory_movements (operation_id, product_id, movement_type, quantity, physical_delta, reserved_delta) VALUES ($1, $2, 'sale', $3, -$3, -$3)`,
+        [saleOperationId, item.product_id, item.quantity]
+      );
     });
     await Promise.all(lineItemPromises);
+
+    // Mark sale operation as completed
+    await client.query(
+      `UPDATE inventory_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [saleOperationId]
+    );
+
     // Mark session as completed
     await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
+
     await client.query('COMMIT');
     return res.status(200).json(saleRecord);
   } catch (error) {
@@ -233,3 +335,4 @@ router.post('/:sessionId/items/:productId/decrement', async (req, res) => {
 });
 
 module.exports = router;
+

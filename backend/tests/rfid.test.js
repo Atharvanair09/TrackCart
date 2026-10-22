@@ -51,9 +51,26 @@ describe('POST /api/rfid/events', () => {
             category: 'Accessories',
             image_url: 'https://example.com/bottle.jpg',
             is_active: true,
-            inventory_qty: 50
+            inventory_qty: 50,
+            reserved_qty: 0
           }]
         });
+      }
+      // Inventory reservation queries
+      if (queryText.includes('INSERT INTO inventory_operations')) {
+        return Promise.resolve({ rows: [{ id: 1 }] });
+      }
+      if (queryText.includes('SELECT inventory_qty, reserved_qty FROM products')) {
+        return Promise.resolve({ rows: [{ inventory_qty: 50, reserved_qty: 0 }] });
+      }
+      if (queryText.includes('UPDATE products SET reserved_qty')) {
+        return Promise.resolve();
+      }
+      if (queryText.includes('INSERT INTO inventory_movements')) {
+        return Promise.resolve();
+      }
+      if (queryText.includes('UPDATE inventory_operations SET status')) {
+        return Promise.resolve();
       }
       if (queryText.includes('cart_items ci')) { // The join query for cart items
         return Promise.resolve({
@@ -203,12 +220,18 @@ describe('POST /api/rfid/events', () => {
 
   test('should return 200 and increment quantity for duplicate product', async () => {
     // Setup mock to simulate item already in cart
+    // Setup mock for duplicate product scenario with inventory reservation
     mockClient.query.mockImplementation((queryText, params) => {
+      // Transaction control
       if (queryText.includes('BEGIN') || queryText.includes('COMMIT')) return Promise.resolve();
-      if (queryText.includes('rfid_events_log') && queryText.includes('SELECT')) return Promise.resolve({ rows: [] }); // Not a strict 5-second duplicate
+      // Deduplication check
+      if (queryText.includes('rfid_events_log') && queryText.includes('SELECT')) return Promise.resolve({ rows: [] });
       if (queryText.includes('rfid_events_log') && queryText.includes('INSERT')) return Promise.resolve();
+      // Cart lookup
       if (queryText.includes('FROM carts')) return Promise.resolve({ rows: [{ cart_id: 'CART_01' }] });
+      // Session lookup
       if (queryText.includes('FROM shopping_sessions')) return Promise.resolve({ rows: [{ session_id: 'SESS_1001' }] });
+      // Product lookup (include inventory fields)
       if (queryText.includes('FROM products')) {
         return Promise.resolve({
           rows: [{
@@ -216,10 +239,13 @@ describe('POST /api/rfid/events', () => {
             tag_uid: '12500123456',
             name: 'Smart Water Bottle',
             price: 19.99,
-            is_active: true
+            is_active: true,
+            inventory_qty: 50,
+            reserved_qty: 0
           }]
         });
       }
+      // Existing cart item check
       if (queryText.includes('FROM cart_items') && queryText.includes('SELECT *')) {
         return Promise.resolve({
           rows: [{
@@ -229,11 +255,28 @@ describe('POST /api/rfid/events', () => {
             unit_price_at_addition: 19.99,
             subtotal: 19.99
           }]
-        }); // Item already in cart
+        });
       }
+      // Inventory reservation workflow
+      if (queryText.includes('INSERT INTO inventory_operations')) {
+        return Promise.resolve({ rows: [{ id: '1' }] });
+      }
+      if (queryText.includes('SELECT inventory_qty, reserved_qty FROM products')) {
+        return Promise.resolve({ rows: [{ inventory_qty: 50, reserved_qty: 0 }] });
+      }
+      if (queryText.includes('UPDATE products SET reserved_qty')) {
+        return Promise.resolve();
+      }
+      if (queryText.includes('INSERT INTO inventory_movements')) {
+        return Promise.resolve();
+      }
+      if (queryText.includes('UPDATE inventory_operations SET status')) {
+        return Promise.resolve();
+      }
+      // Update existing cart item
       if (queryText.includes('UPDATE cart_items')) return Promise.resolve();
+      // Return updated cart items list
       if (queryText.includes('cart_items ci')) {
-        // Return updated items list
         return Promise.resolve({
           rows: [{
             session_id: 'SESS_1001',
@@ -290,12 +333,18 @@ describe('POST /api/rfid/events', () => {
 
   test('should handle multiple different products correctly', async () => {
     // This mostly verifies the cart total calculation with multiple items
+    // Mock for multiple different products scenario with inventory reservation
     mockClient.query.mockImplementation((queryText, params) => {
+      // Transaction control
       if (queryText.includes('BEGIN') || queryText.includes('COMMIT')) return Promise.resolve();
+      // Deduplication
       if (queryText.includes('rfid_events_log') && queryText.includes('SELECT')) return Promise.resolve({ rows: [] });
       if (queryText.includes('rfid_events_log') && queryText.includes('INSERT')) return Promise.resolve();
+      // Cart lookup
       if (queryText.includes('FROM carts')) return Promise.resolve({ rows: [{ cart_id: 'CART_01' }] });
+      // Session lookup
       if (queryText.includes('FROM shopping_sessions')) return Promise.resolve({ rows: [{ session_id: 'SESS_1001' }] });
+      // Product lookup (include inventory fields)
       if (queryText.includes('FROM products')) {
         return Promise.resolve({
           rows: [{
@@ -303,16 +352,24 @@ describe('POST /api/rfid/events', () => {
             tag_uid: '12500123458',
             name: 'Second Item',
             price: 5.00,
-            is_active: true
+            is_active: true,
+            inventory_qty: 30,
+            reserved_qty: 0
           }]
         });
       }
-      if (queryText.includes('FROM cart_items') && queryText.includes('SELECT *')) {
-        return Promise.resolve({ rows: [] }); // New item
-      }
+      // No existing cart item for this new product
+      if (queryText.includes('FROM cart_items') && queryText.includes('SELECT *')) return Promise.resolve({ rows: [] });
+      // Insert new cart item
       if (queryText.includes('INSERT INTO cart_items')) return Promise.resolve();
+      // Inventory reservation workflow
+      if (queryText.includes('INSERT INTO inventory_operations')) return Promise.resolve({ rows: [{ id: '2' }] });
+      if (queryText.includes('SELECT inventory_qty, reserved_qty FROM products')) return Promise.resolve({ rows: [{ inventory_qty: 30, reserved_qty: 0 }] });
+      if (queryText.includes('UPDATE products SET reserved_qty')) return Promise.resolve();
+      if (queryText.includes('INSERT INTO inventory_movements')) return Promise.resolve();
+      if (queryText.includes('UPDATE inventory_operations SET status')) return Promise.resolve();
+      // Return updated cart items list (including existing first item and the new second item)
       if (queryText.includes('cart_items ci')) {
-        // Return multiple items list
         return Promise.resolve({
           rows: [
             {

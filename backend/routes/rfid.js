@@ -82,6 +82,51 @@ router.post('/events', async (req, res) => {
       return res.status(400).json({ error: 'Product is inactive' });
     }
 
+    // Reserve inventory for one unit within the same transaction
+    const reservationKey = `${deviceId}-${normalizedUid}-${Date.now()}`;
+    // Create reservation operation (pending)
+    const opResult = await client.query(
+      `INSERT INTO inventory_operations (operation_type, operation_key, session_id, status)
+       VALUES ('reservation', $1, $2, 'pending')
+       RETURNING id`,
+      [reservationKey, sessionId]
+    );
+    const operationId = opResult.rows[0].id;
+
+    // Lock the product row and verify available stock
+    const productLock = await client.query(
+      `SELECT inventory_qty, reserved_qty FROM products WHERE product_id = $1 FOR UPDATE`,
+      [product.product_id]
+    );
+    if (productLock.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Product not found during reservation' });
+    }
+    const { inventory_qty, reserved_qty } = productLock.rows[0];
+    const available = Number(inventory_qty) - Number(reserved_qty);
+    if (available <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Insufficient stock for reservation' });
+    }
+    // Reserve one unit
+    await client.query(
+      `UPDATE products SET reserved_qty = reserved_qty + 1 WHERE product_id = $1`,
+      [product.product_id]
+    );
+    // Record inventory movement
+    await client.query(
+      `INSERT INTO inventory_movements (operation_id, product_id, movement_type, quantity, physical_delta, reserved_delta)
+       VALUES ($1, $2, 'reservation', 1, 0, 1)`,
+      [operationId, product.product_id]
+    );
+    // Mark reservation operation as completed
+    await client.query(
+      `UPDATE inventory_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [operationId]
+    );
+
+
+
     // Add or increment cart item
     const existingItem = await client.query(`
       SELECT * FROM cart_items WHERE session_id = $1 AND product_id = $2

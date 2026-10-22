@@ -1,4 +1,10 @@
 const request = require('supertest');
+jest.mock('../services/paymentService', () => ({
+  isConfigured: jest.fn(() => true),
+  verifySignature: jest.fn(() => true),
+  createOrder: jest.fn()
+}));
+
 const app = require('../index');
 
 // Mock the 'pg' module
@@ -18,6 +24,13 @@ jest.mock('pg', () => {
     _mockPool: mPool
   };
 });
+
+// Mock Razorpay payment service
+jest.mock('../services/paymentService', () => ({
+  isConfigured: jest.fn(() => true),
+  verifySignature: jest.fn(() => true),
+  createOrder: jest.fn()
+}));
 
 const { Pool, _mockClient, _mockPool } = require('pg');
 const mockClient = _mockClient;
@@ -167,6 +180,10 @@ describe('Session APIs', () => {
           });
         }
 
+        // Mock reservation lookup for product PROD01 (quantity 2)
+        if (queryText.includes('FROM inventory_operations') && queryText.includes('reservation')) {
+          return Promise.resolve({ rows: [{ operation_id: 1, reserved_quantity: 2 }] });
+        }
         return Promise.resolve({ rows: [] });
       }),
       release: jest.fn()
@@ -174,7 +191,7 @@ describe('Session APIs', () => {
       // mock pool.connect to return our mock client
       mockPool.connect.mockResolvedValue(mockClient);
 
-      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveProperty('sale_id');
     });
@@ -282,8 +299,25 @@ describe('Session APIs', () => {
         if (queryText.includes('FROM cart_items')) {
           return Promise.resolve({ rows: [{ product_id: 'PROD01', quantity: 2, unit_price_at_addition: 10 }] });
         }
+        // Mock reservation check
+        if (queryText.includes('FROM inventory_operations') && queryText.includes('reservation')) {
+  return Promise.resolve({ rows: [{ operation_id: 1, reserved_quantity: 2 }] });
+}
+        // Fallback reservation mock
+        if (queryText.includes('reservation')) {
+          return Promise.resolve({ rows: [{ operation_id: 1, reserved_quantity: 2 }] });
+        }
+        // Mock inventory update (deduct both inventory and reserved)
         if (queryText.includes('UPDATE products SET inventory_qty')) {
           return Promise.resolve({ rowCount: 1 });
+        }
+        // Mock insertion of sale operation
+        if (queryText.includes('INSERT INTO inventory_operations') && queryText.includes('sale')) {
+          return Promise.resolve({ rows: [{ id: 10 }] });
+        }
+        // Mock insertion of inventory movement for sale
+        if (queryText.includes('INSERT INTO inventory_movements') && queryText.includes('sale')) {
+          return Promise.resolve({ rows: [] });
         }
         if (queryText.includes('INSERT INTO sales')) {
           return Promise.resolve({ rows: [{ sale_id: 'SALE_123', subtotal: 20, tax_rate: 0.0825, tax_amount: 1.65, total: 21.65 }] });
@@ -297,7 +331,7 @@ describe('Session APIs', () => {
         return Promise.resolve({ rows: [] });
       });
 
-      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveProperty('sale_id');
       expect(mockClient.query).toHaveBeenCalledWith(
@@ -351,13 +385,17 @@ describe('Session APIs', () => {
         if (queryText.includes('FROM cart_items')) {
           return Promise.resolve({ rows: [{ product_id: 'PROD02', quantity: 5, unit_price_at_addition: 10 }] });
         }
+        // Mock reservation check for insufficient stock test
+        if (queryText.includes('SELECT io.id') && queryText.includes('reservation')) {
+          return Promise.resolve({ rows: [{ operation_id: 1, reserved_quantity: 5 }] });
+        }
         if (queryText.includes('UPDATE products SET inventory_qty')) {
           return Promise.resolve({ rowCount: 0 });
         }
         return Promise.resolve({ rows: [] });
       });
 
-      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toMatch(/Insufficient stock/);
       // Verify rollback occurred and no commit
@@ -383,13 +421,17 @@ describe('Session APIs', () => {
         if (queryText.includes('FROM cart_items')) {
           return Promise.resolve({ rows: [{ product_id: 'PROD99', quantity: 1, unit_price_at_addition: 10 }] });
         }
+        // Mock reservation check for DB failure test
+        if (queryText.includes('SELECT io.id') && queryText.includes('reservation')) {
+          return Promise.resolve({ rows: [{ operation_id: 2, reserved_quantity: 1 }] });
+        }
         if (queryText.includes('UPDATE products SET inventory_qty')) {
           return Promise.reject(new Error('DB failure'));
         }
         return Promise.resolve({ rows: [] });
       });
 
-      const res = await request(app).post('/api/sessions/SESS_TEST/checkout');
+      const res = await request(app).post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
       expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe('Internal server error');
       // Verify rollback occurred and no commit
@@ -445,8 +487,23 @@ describe('Session APIs', () => {
       });
     }
 
+    // Mock reservation check for idempotency test
+    if (queryText.includes('SELECT io.id') && queryText.includes('reservation')) {
+      return Promise.resolve({ rows: [{ operation_id: 3, reserved_quantity: 1 }] });
+    }
+
     if (queryText.includes('UPDATE products SET inventory_qty')) {
       return Promise.resolve({ rowCount: 1 });
+    }
+
+    // Insert sale operation (needs id for movements)
+    if (queryText.includes('INSERT INTO inventory_operations') && queryText.includes('sale')) {
+      return Promise.resolve({ rows: [{ id: 99 }] });
+    }
+
+    // Insert inventory movement for sale
+    if (queryText.includes('INSERT INTO inventory_movements') && queryText.includes('sale')) {
+      return Promise.resolve({ rows: [] });
     }
 
     if (queryText.includes('INSERT INTO sales')) {
@@ -466,13 +523,13 @@ describe('Session APIs', () => {
   });
 
   const first = await request(app)
-    .post('/api/sessions/SESS_TEST/checkout');
+    .post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
 
   expect(first.statusCode).toBe(200);
   expect(first.body.sale_id).toBe('SALE_1');
 
   const second = await request(app)
-    .post('/api/sessions/SESS_TEST/checkout');
+    .post('/api/sessions/SESS_TEST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
 
   expect(second.statusCode).toBe(200);
   expect(second.body.sale_id).toBe('SALE_1');
