@@ -67,7 +67,8 @@ async function initDb() {
         category TEXT,
         image_url TEXT,
         is_active BOOLEAN DEFAULT true,
-        inventory_qty INTEGER DEFAULT 0
+        inventory_qty INTEGER DEFAULT 0,
+        reserved_qty INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS users (
