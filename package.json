@@ -1,14 +1,13 @@
+
 {
   "name": "smart-shopping-cart-tools",
   "version": "1.0.0",
   "private": true,
   "description": "Tooling for the Smart Shopping Cart project",
   "main": "index.js",
-      "scripts": {
-      "genqr": "node tools/generate_qrs.js",
-      "fixcarts": "node backend/fix_carts.js"
-    },
-    "genqr": "node tools/generate_qrs.js"
+  "scripts": {
+    "genqr": "node tools/generate_qrs.js",
+    "fixcarts": "node backend/fix_carts.js"
   },
   "dependencies": {
     "qrcode": "^1.5.3"
