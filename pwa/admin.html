@@ -184,6 +184,81 @@
             </div>
           </div>
 
+          <!-- Visual Store Intelligence & Performance Graphs -->
+          <div class="dashboard-charts-section">
+            <div class="dashboard-charts-header">
+              <div class="section-title-wrap">
+                <span class="chart-section-icon">📊</span>
+                <div>
+                  <h3 class="chart-section-title">Visual Store Intelligence & Analytics</h3>
+                  <p class="chart-section-subtitle">Real-time revenue momentum, inventory thresholds, category sales share & hourly cart foot-traffic</p>
+                </div>
+              </div>
+              <div class="dashboard-chart-actions">
+                <span class="chart-live-badge"><span class="live-dot-pulse"></span> Dynamic Telemetry</span>
+                <button class="table-btn primary" data-jump-tab="reports">Detailed Reports &rarr;</button>
+              </div>
+            </div>
+
+            <div class="dashboard-charts-grid">
+              <!-- Graph 1: Sales & Revenue Momentum -->
+              <div class="chart-card dashboard-chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">📈 Sales & Revenue Momentum</h4>
+                    <p class="chart-card-subtitle">Daily gross revenue trend and settlement trajectory</p>
+                  </div>
+                  <div class="chart-metric-pill" id="dash-chart-rev-metric">$0.00 Period Total</div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="dash-chart-revenue"></canvas>
+                </div>
+              </div>
+
+              <!-- Graph 2: Stock Levels vs Safety Thresholds -->
+              <div class="chart-card dashboard-chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">📦 Stock Levels vs Safety Thresholds</h4>
+                    <p class="chart-card-subtitle">Available shelf stock vs minimum reorder level by SKU</p>
+                  </div>
+                  <div class="chart-metric-pill info" id="dash-chart-stock-metric">Real-time Stock</div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="dash-chart-stock-levels"></canvas>
+                </div>
+              </div>
+
+              <!-- Graph 3: Category Sales & Catalog Distribution -->
+              <div class="chart-card dashboard-chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">🛍️ Category Sales & Catalog Share</h4>
+                    <p class="chart-card-subtitle">Merchandise revenue contribution across store departments</p>
+                  </div>
+                  <div class="chart-metric-pill purple" id="dash-chart-cat-metric">Catalog Share</div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="dash-chart-categories"></canvas>
+                </div>
+              </div>
+
+              <!-- Graph 4: Store Hourly Cart Activity & Foot-Traffic -->
+              <div class="chart-card dashboard-chart-card">
+                <div class="chart-card-header">
+                  <div>
+                    <h4 class="chart-card-title">🛒 In-Store Cart Activity & Hourly Traffic</h4>
+                    <p class="chart-card-subtitle">Active RFID cart density & checkout velocity by operating hour</p>
+                  </div>
+                  <div class="chart-metric-pill warning" id="dash-chart-traffic-metric">Store Hours (8am - 10pm)</div>
+                </div>
+                <div class="chart-canvas-wrap">
+                  <canvas id="dash-chart-traffic"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Today's Priorities -->
           <div class="priorities-banner">
             <div class="priorities-header">

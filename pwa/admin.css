@@ -97,8 +97,10 @@ body.admin-body {
   align-items: center;
   justify-content: space-between;
   height: 60px;
-  padding: 0 24px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border-subtle);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .brand-group {
@@ -256,11 +258,13 @@ body.admin-body {
 .admin-tab-nav {
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 16px;
   height: 48px;
   background: var(--bg-surface);
   overflow-x: auto;
   gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-tab-nav::-webkit-scrollbar {
@@ -311,10 +315,12 @@ body.admin-body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
+  padding: 12px 16px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .action-bar-left {
@@ -390,10 +396,11 @@ body.admin-body {
    ============================================================ */
 .admin-main-container {
   flex: 1;
-  padding: 0 24px 40px 24px;
-  max-width: 1440px;
-  margin: 0 auto;
+  padding: 0 16px 36px 16px;
+  max-width: 100%;
+  margin: 0;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-tab-view {
@@ -439,9 +446,22 @@ body.admin-body {
    ============================================================ */
 .kpi-grid-4 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+@media (max-width: 1080px) {
+  .kpi-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .kpi-grid-4 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kpi-card {
@@ -527,22 +547,161 @@ body.admin-body {
 }
 
 /* ============================================================
+   Dashboard Visual Intelligence & Graphs Section
+   ============================================================ */
+.dashboard-charts-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard-charts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chart-section-icon {
+  font-size: 1.3rem;
+}
+
+.chart-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.chart-section-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.dashboard-chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-live-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-success-dark);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-dot-pulse {
+  width: 7px;
+  height: 7px;
+  background: var(--color-success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: livePulse 2s infinite;
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  width: 100%;
+}
+
+@media (max-width: 1080px) {
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-chart-card {
+  background: var(--bg-surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+}
+
+.dashboard-chart-card:hover {
+  background: #ffffff;
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-metric-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-border);
+}
+
+.chart-metric-pill.info {
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
+  border-color: var(--color-success-border);
+}
+
+.chart-metric-pill.purple {
+  background: var(--color-purple-bg);
+  color: var(--color-purple-dark);
+  border-color: var(--color-purple-border);
+}
+
+.chart-metric-pill.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border-color: var(--color-warning-border);
+}
+
+/* ============================================================
    Today's Priorities & Store Insights Sections
    ============================================================ */
 .priorities-banner {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
-  margin-bottom: 24px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow-sm);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .priorities-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .priorities-title-group {
@@ -564,7 +723,8 @@ body.admin-body {
 .priorities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
+  gap: 12px;
+  width: 100%;
 }
 
 .priority-card {
@@ -632,9 +792,22 @@ body.admin-body {
 /* Store Insights Grid */
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
   margin-bottom: 24px;
+  width: 100%;
+}
+
+@media (max-width: 1360px) {
+  .insights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .insight-card {
@@ -912,9 +1085,16 @@ body.admin-body {
 
 .charts-grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+@media (max-width: 1080px) {
+  .charts-grid-2 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .chart-card {
