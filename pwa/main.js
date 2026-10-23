@@ -420,9 +420,9 @@ async function startCamera() {
         const rawScanned = decodedText.trim();
         const normalizedId = normalizeCartIdFrontend(rawScanned);
         if (normalizedId) {
-          console.log('QR Code Scanned raw:', rawScanned);
+          console.log('QR Code Scanned and normalized:', normalizedId);
           stopCamera();
-          createSession(rawScanned);
+          createSession(normalizedId);
         } else {
           showError(scannerError, `INVALID QR CONTENT: ${rawScanned}`);
         }
