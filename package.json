@@ -4,7 +4,10 @@
   "private": true,
   "description": "Tooling for the Smart Shopping Cart project",
   "main": "index.js",
-  "scripts": {
+      "scripts": {
+      "genqr": "node tools/generate_qrs.js",
+      "fixcarts": "node backend/fix_carts.js"
+    },
     "genqr": "node tools/generate_qrs.js"
   },
   "dependencies": {
