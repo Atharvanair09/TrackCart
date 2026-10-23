@@ -114,15 +114,12 @@ async function createSession(cartId) {
   // Front‑end normalisation – mirrors backend utils/cartId.js
   function normalizeCartIdFrontend(rawId) {
     if (!rawId || typeof rawId !== 'string') return null;
-    const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, ''); // strip non‑alphanum
-    const match = cleaned.match(/^CART0?(\\d)$/);
+    const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const match = cleaned.match(/CART0?([1-3])/);
     if (!match) return null;
-    const num = parseInt(match[1], 10);
-    if (num >= 1 && num <= 3) {
-      return `CART_0${num}`; // canonical DB id
-    }
-    return null;
+    return `CART_0${match[1]}`;
   }
+  
 
   const normalizedId = normalizeCartIdFrontend(cartId);
   if (!normalizedId) {
@@ -420,14 +417,16 @@ async function startCamera() {
       (decodedText) => {
         if (!isScanning) return;
         
-        const cleanCartId = decodedText.trim().toUpperCase();
-        if (/^[\w-]+$/.test(cleanCartId)) {
-          console.log('QR Code Scanned:', cleanCartId);
+        const rawScanned = decodedText.trim();
+        const normalizedId = normalizeCartIdFrontend(rawScanned);
+        if (normalizedId) {
+          console.log('QR Code Scanned raw:', rawScanned);
           stopCamera();
-          createSession(cleanCartId);
+          createSession(rawScanned);
         } else {
-          showError(scannerError, `INVALID QR CONTENT: ${cleanCartId}`);
+          showError(scannerError, `INVALID QR CONTENT: ${rawScanned}`);
         }
+      
       },
       (errorMessage) => {
         // Ignore continuous scan parse errors

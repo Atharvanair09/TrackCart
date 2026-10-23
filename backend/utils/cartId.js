@@ -12,15 +12,11 @@
  */
 function normalizeCartId(rawId) {
   if (!rawId || typeof rawId !== 'string') return null;
-  const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, ''); // remove non‑alphanum
-  // Expect pattern CART<optional 0><digit>
-  const match = cleaned.match(/^CART0?(\d)$/);
+  const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const match = cleaned.match(/CART0?([1-3])/);
   if (!match) return null;
-  const num = parseInt(match[1], 10);
-  if (num >= 1 && num <= 3) {
-    return `CART_0${num}`; // canonical DB ids use leading zero
-  }
-  return null;
+  return `CART_0${match[1]}`;
 }
+
 
 module.exports = { normalizeCartId };
