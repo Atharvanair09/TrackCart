@@ -109,17 +109,18 @@ function formatPrice(amount) {
   }).format(amount || 0);
 }
 
+// Front‑end normalisation – mirrors backend utils/cartId.js
+function normalizeCartIdFrontend(rawId) {
+  if (!rawId || typeof rawId !== 'string') return null;
+  const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const match = cleaned.match(/CART0?([1-3])/);
+  if (!match) return null;
+  return `CART_0${match[1]}`;
+}
+
 // Create Session API Call (POST /api/sessions)
 async function createSession(cartId) {
-  // Front‑end normalisation – mirrors backend utils/cartId.js
-  function normalizeCartIdFrontend(rawId) {
-    if (!rawId || typeof rawId !== 'string') return null;
-    const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const match = cleaned.match(/CART0?([1-3])/);
-    if (!match) return null;
-    return `CART_0${match[1]}`;
-  }
-  
+
 
   const normalizedId = normalizeCartIdFrontend(cartId);
   if (!normalizedId) {
@@ -144,9 +145,9 @@ async function createSession(cartId) {
 
     if (!res.ok) {
       if (res.status === 409) {
-        throw new Error(`HTTP 409: Cart '${cleanCartId}' is already in use by an active session.`);
+        throw new Error(`HTTP 409: Cart '${normalizedId}' is already in use by an active session.`);
       } else if (res.status === 404) {
-        throw new Error(`HTTP 404: Cart '${cleanCartId}' not found in database.`);
+        throw new Error(`HTTP 404: Cart '${normalizedId}' not found in database.`);
       } else {
         throw new Error(data.error || 'Failed to create session');
       }
@@ -235,6 +236,25 @@ function renderCart(sessionData) {
 
   // Use friendly name in other UI places if needed
   const items = sessionData.items || [];
+
+  // ----- MISMATCH NOTIFICATION LOGIC -----
+  // Preserve previous cart total in a closure variable (global in this file)
+  if (typeof window._prevCartTotal === 'undefined') {
+    window._prevCartTotal = null;
+  }
+  const currentCartTotal = sessionData.cartTotal || 0;
+  const cameraSync = sessionData.cameraSync; // true if recent camera event matched
+  // If cart total changed but no camera sync, warn user
+  if (window._prevCartTotal !== null && currentCartTotal !== window._prevCartTotal && !cameraSync) {
+    showError(cartError, 'CAMERA MISMATCH: Cart changed without camera confirmation');
+  } else if (cameraSync && (window._prevCartTotal === null || currentCartTotal === window._prevCartTotal)) {
+    // Camera reported a change but cart unchanged – also warn
+    showError(cartError, 'CAMERA MISMATCH: Camera detected change but cart unchanged');
+  } else {
+    hideError(cartError);
+  }
+  // Update previous total for next comparison
+  window._prevCartTotal = currentCartTotal;
 
   if (items.length === 0) {
     emptyState.classList.remove('hidden');

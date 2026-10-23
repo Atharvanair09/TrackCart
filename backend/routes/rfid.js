@@ -23,6 +23,7 @@ router.post('/events', async (req, res) => {
   }
 
   const client = await pool.connect();
+  const CAM_CORRELATION_WINDOW = parseInt(process.env.CAM_CORRELATION_WINDOW || '5', 10); // seconds
   try {
     await client.query('BEGIN');
 
@@ -155,6 +156,22 @@ router.post('/events', async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Correlate with recent camera events for this device
+    let cameraSync = false;
+    try {
+      const camRes = await client.query(
+        `SELECT * FROM camera_events_log 
+         WHERE device_id = $1 
+           AND timestamp >= NOW() - INTERVAL '${CAM_CORRELATION_WINDOW} seconds'`,
+        [trimmedDeviceId]
+      );
+      if (camRes.rows.length > 0) {
+        cameraSync = true;
+      }
+    } catch (e) {
+      console.error('Error checking camera events:', e);
+    }
+
     const cartItems = itemsResult.rows;
     const cartTotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
 
@@ -180,7 +197,8 @@ router.post('/events', async (req, res) => {
         inventoryQty: product.inventory_qty
       },
       cartTotal: cartTotal,
-      items: cartItems
+      items: cartItems,
+      cameraSync: cameraSync
     });
 
   } catch (error) {
