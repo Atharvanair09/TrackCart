@@ -67,6 +67,20 @@ router.post('/events', async (req, res) => {
     }
     const sessionId = sessionResult.rows[0].session_id;
 
+    // Validate session expiration before proceeding
+    const sessionCheck = await client.query(`
+      SELECT session_id FROM shopping_sessions
+      WHERE session_id = $1
+        AND status = 'active'
+        AND expired_at IS NULL
+        AND last_activity_at > NOW() - INTERVAL '15 minutes'
+      FOR UPDATE
+    `, [sessionId]);
+    if (sessionCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(410).json({ error: 'Session expired' });
+    }
+
     // Look up product
     const productResult = await client.query(
       'SELECT * FROM products WHERE UPPER(REPLACE(tag_uid, \':\', \'\')) = $1',
@@ -154,7 +168,8 @@ router.post('/events', async (req, res) => {
       WHERE ci.session_id = $1
     `, [sessionId]);
 
-    await client.query('COMMIT');
+    await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
+await client.query('COMMIT');
 
     // Correlate with recent camera events for this device
     let cameraSync = false;

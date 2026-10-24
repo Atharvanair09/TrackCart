@@ -35,12 +35,30 @@ app.use('/api/admin', adminRoutes);
 
 // Database initialization
 initDb().then(() => {
+  // Start session expiry worker after DB is ready
+  const { startSessionExpiryWorker } = require('./sessionExpiryWorker');
+  startSessionExpiryWorker();
+
   if (process.env.NODE_ENV !== 'test') {
     // Bind to 0.0.0.0 so Render's reverse proxy can reach the server.
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });
+
+    // Graceful shutdown handling
+    const shutdown = () => {
+      console.log('Shutting down server...');
+      server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+      });
+    };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
   }
-}).catch(console.error);
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
+});
 
 module.exports = app; // For testing

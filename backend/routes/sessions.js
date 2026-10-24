@@ -66,6 +66,10 @@ router.get('/:sessionId', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
     const session = sessionResult.rows[0];
+    // If session is expired, return 410 Gone
+    if (session.status === 'expired') {
+      return res.status(410).json({ error: 'Session has expired' });
+    }
     
     const itemsResult = await pool.query(`
       SELECT ci.*, p.name, p.image_url 
@@ -94,8 +98,14 @@ router.post('/:sessionId/create-order', async (req, res) => {
     // Verify session exists and is active
     const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2 FOR UPDATE', [sessionId, 'active']);
     if (sessionRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Invalid or inactive session' });
+        // Check if session exists but is expired
+        const statusRes = await client.query('SELECT status FROM shopping_sessions WHERE session_id = $1', [sessionId]);
+        if (statusRes.rows.length && statusRes.rows[0].status === 'expired') {
+            await client.query('ROLLBACK');
+            return res.status(410).json({ error: 'Session has expired' });
+        }
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid or inactive session' });
     }
     const itemsRes = await client.query(
       `SELECT ci.*, p.price FROM cart_items ci 
@@ -142,8 +152,14 @@ router.post('/:sessionId/checkout', async (req, res) => {
     // Verify session exists and is active, lock the row for concurrency safety
     const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2 FOR UPDATE', [sessionId, 'active']);
     if (sessionRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Invalid or inactive session' });
+        // Check if session exists but is expired
+        const statusRes = await client.query('SELECT status FROM shopping_sessions WHERE session_id = $1', [sessionId]);
+        if (statusRes.rows.length && statusRes.rows[0].status === 'expired') {
+            await client.query('ROLLBACK');
+            return res.status(410).json({ error: 'Session has expired' });
+        }
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid or inactive session' });
     }
     // Idempotency: if a sale already exists for this session, return it without modifying inventory
     const existingSale = await client.query('SELECT * FROM sales WHERE session_id = $1', [sessionId]);
@@ -320,6 +336,11 @@ const reservationAggRes = await client.query(
 router.post('/:sessionId/cancel', async (req, res) => {
   const sessionId = req.params.sessionId;
   try {
+    // Check if session is expired
+    const statusRes = await pool.query('SELECT status FROM shopping_sessions WHERE session_id = $1', [sessionId]);
+    if (statusRes.rows.length && statusRes.rows[0].status === 'expired') {
+      return res.status(410).json({ error: 'Session has expired' });
+    }
     const result = await pool.query(
       'UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2 RETURNING *',
       ['cancelled', sessionId]
@@ -345,7 +366,13 @@ router.post('/:sessionId/items/:productId/decrement', async (req, res) => {
     await client.query('BEGIN');
     // Verify session exists and is active
     const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2', [sessionId, 'active']);
+    // Session not active – check if expired
     if (sessionRes.rows.length === 0) {
+      const statusRes = await client.query('SELECT status FROM shopping_sessions WHERE session_id = $1', [sessionId]);
+      if (statusRes.rows.length && statusRes.rows[0].status === 'expired') {
+        await client.query('ROLLBACK');
+        return res.status(410).json({ error: 'Session has expired' });
+      }
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Active session not found' });
     }
@@ -362,9 +389,13 @@ router.post('/:sessionId/items/:productId/decrement', async (req, res) => {
         `UPDATE cart_items SET quantity = quantity - 1, subtotal = (quantity - 1) * unit_price_at_addition WHERE session_id = $1 AND product_id = $2`,
         [sessionId, productId]
       );
+      // Update last activity timestamp on successful decrement
+      await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
     } else {
       // Quantity would become zero – remove item
       await client.query('DELETE FROM cart_items WHERE session_id = $1 AND product_id = $2', [sessionId, productId]);
+      // Update last activity timestamp on item removal
+      await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
     }
     // Fetch updated cart state
     const itemsResult = await client.query(`

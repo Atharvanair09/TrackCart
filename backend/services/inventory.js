@@ -171,6 +171,7 @@ async function releaseReservation({
     reservationOperationKey,
     productId,
     quantity,
+    externalClient,
   }) {
     if (
       typeof operationKey !== 'string' ||
@@ -185,10 +186,13 @@ async function releaseReservation({
       throw new Error('Invalid release parameters');
     }
   
-    const client = await pool.connect();
+    const client = externalClient || (await pool.connect());
+    const isOwner = !externalClient; // true if we created the client
   
     try {
-      await client.query('BEGIN');
+      if (isOwner) {
+        await client.query('BEGIN');
+      }
   
       // Lock the original reservation first. All releases against this
       // reservation must acquire this lock before checking released quantity.
@@ -255,7 +259,7 @@ async function releaseReservation({
           priorMovement.rows.length === 1 &&
           Number(priorMovement.rows[0].quantity) === quantity
         ) {
-          await client.query('COMMIT');
+          if (isOwner) await client.query('COMMIT');
   
           return {
             operationId: release.id,
@@ -361,7 +365,7 @@ async function releaseReservation({
         [releaseInsert.rows[0].id]
       );
   
-      await client.query('COMMIT');
+      if (isOwner) await client.query('COMMIT');
   
       return {
         operationId: releaseInsert.rows[0].id,
@@ -369,14 +373,14 @@ async function releaseReservation({
       };
     } catch (error) {
       try {
-        await client.query('ROLLBACK');
+        if (isOwner) await client.query('ROLLBACK');
       } catch {
         // Preserve the original error.
       }
   
       throw error;
     } finally {
-      client.release();
+      if (isOwner) client.release();
     }
 }
   
