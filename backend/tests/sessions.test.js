@@ -76,6 +76,15 @@ describe('Session APIs', () => {
       expect(res.body.status).toBe('active');
     });
 
+    test('new session should have last_activity_at set (TEST 1.2)', async () => {
+      const res = await request(app)
+        .post('/api/sessions')
+        .send({ userId: 'USER123', cartId: 'CART_01' });
+      expect(res.statusCode).toBe(201);
+      expect(res.body.last_activity_at).toBeDefined();
+      expect(res.body.last_activity_at).not.toBeNull();
+    });
+
     test('should start a session successfully without userId (TEST 1.1)', async () => {
       const res = await request(app)
         .post('/api/sessions')

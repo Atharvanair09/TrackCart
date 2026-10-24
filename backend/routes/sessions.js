@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
 
     const sessionId = `SESS_${Date.now()}`;
     const result = await client.query(
-      'INSERT INTO shopping_sessions (session_id, user_id, cart_id, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      'INSERT INTO shopping_sessions (session_id, user_id, cart_id, status, last_activity_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING *',
       [sessionId, userId || null, cartId, 'active']
     );
 
