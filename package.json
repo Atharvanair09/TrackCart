@@ -10,6 +10,7 @@
     "fixcarts": "node backend/fix_carts.js"
   },
   "dependencies": {
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.3",
+    "web-push": "^4.0.0"
   }
 }

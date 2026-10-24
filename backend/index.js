@@ -32,6 +32,8 @@ const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 const adminRoutes = require('./routes/admin');
 app.use('/api/admin', adminRoutes);
+const pushRoutes = require('./routes/push');
+app.use('/api/push', pushRoutes);
 
 // Database initialization
 initDb().then(() => {
