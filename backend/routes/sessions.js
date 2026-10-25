@@ -391,11 +391,13 @@ router.post('/:sessionId/items/:productId/decrement', async (req, res) => {
       );
       // Update last activity timestamp on successful decrement
       await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
+await client.query('DELETE FROM session_notifications WHERE session_id = $1', [sessionId]);
     } else {
       // Quantity would become zero – remove item
       await client.query('DELETE FROM cart_items WHERE session_id = $1 AND product_id = $2', [sessionId, productId]);
       // Update last activity timestamp on item removal
       await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
+await client.query('DELETE FROM session_notifications WHERE session_id = $1', [sessionId]);
     }
     // Fetch updated cart state
     const itemsResult = await client.query(`

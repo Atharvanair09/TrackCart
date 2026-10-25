@@ -60,8 +60,8 @@ describe('Session APIs', () => {
           return Promise.resolve({ rows: [] }); // No active session
         }
         if (queryText.includes('INSERT INTO shopping_sessions')) {
-          return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', user_id: 'USER123', cart_id: 'CART_01', status: 'active' }] });
-        }
+  return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', user_id: 'USER123', cart_id: 'CART_01', status: 'active', last_activity_at: '2021-01-01T00:00:00.000Z' }] });
+}
         return Promise.resolve({ rows: [] });
       });
     });

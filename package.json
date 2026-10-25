@@ -7,7 +7,8 @@
   "main": "index.js",
   "scripts": {
     "genqr": "node tools/generate_qrs.js",
-    "fixcarts": "node backend/fix_carts.js"
+    "fixcarts": "node backend/fix_carts.js",
+    "test": "jest"
   },
   "dependencies": {
     "qrcode": "^1.5.3",

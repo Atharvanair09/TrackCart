@@ -169,6 +169,7 @@ router.post('/events', async (req, res) => {
     `, [sessionId]);
 
     await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
+await client.query('DELETE FROM session_notifications WHERE session_id = $1', [sessionId]);
 await client.query('COMMIT');
 
     // Correlate with recent camera events for this device
