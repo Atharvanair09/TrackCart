@@ -1,10 +1,13 @@
 // Frontend Push Notification helper
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function initPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     console.warn('Push messaging is not supported');
     return;
   }
+  const sessionId = localStorage.getItem('smart_cart_session_id');
+  if (!sessionId) { console.warn('No sessionId available; push init deferred'); return; }
 
   try {
     const registration = await navigator.serviceWorker.register('/sw.js');
@@ -16,32 +19,36 @@ export async function initPush() {
       return;
     }
 
-    // Get VAPID public key from backend
-    const resp = await fetch('/api/push/publicKey');
-    if (!resp.ok) {
-      console.error('Failed to obtain VAPID public key');
-      return;
+        // Ensure we have a push subscription; reuse if exists
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      // Get VAPID public key from backend
+      const resp = await fetch(`${API_BASE}/push/publicKey`);
+      if (!resp.ok) {
+        console.error('Failed to obtain VAPID public key');
+        return;
+      }
+      const { publicKey } = await resp.json();
+      const convertedVapidKey = urlBase64ToUint8Array(publicKey);
+      // Create new subscription
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey,
+      });
     }
-    const { publicKey } = await resp.json();
-    const convertedVapidKey = urlBase64ToUint8Array(publicKey);
 
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedVapidKey,
-    });
-
-    // Send subscription to backend (assuming sessionId is available globally or via localStorage)
-    const sessionId = localStorage.getItem('sessionId');
-    if (!sessionId) {
-      console.warn('No sessionId found for push subscription');
-      return;
-    }
-    await fetch('/api/push/subscribe', {
+        // Send subscription to backend (sessionId already validated)
+    const response = await fetch(`${API_BASE}/push/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, subscription }),
     });
-    console.log('Push subscription sent to server');
+    if (!response.ok) {
+      console.error('Failed to register push subscription', response.status);
+      return;
+    }
+    const result = await response.json();
+    console.log('Push subscription registered', result);
   } catch (err) {
     console.error('Error during push setup', err);
   }

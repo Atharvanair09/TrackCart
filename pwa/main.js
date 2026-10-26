@@ -156,7 +156,8 @@ async function createSession(cartId) {
     currentSessionId = data.session_id;
     localStorage.setItem('smart_cart_session_id', currentSessionId);
 
-    showScreen('cart');
+    initPush();
+  showScreen('cart');
     fetchCart(true);
     startPolling();
 
