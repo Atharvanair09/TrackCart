@@ -4,30 +4,30 @@
 
 :root {
   /* Background surfaces */
-  --bg-main: #FFFFFF; /* neutral background */
-  --bg-surface: #FFFFFF;
-  --bg-surface-secondary: #F5F5F5; /* light secondary surface */
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #F0F0F0;
+  --bg-main: #E7E7E7; /* page background */
+  --bg-surface: #000000; /* navigation and headers */
+  --bg-surface-secondary: #000000; /* secondary surfaces */
+  --bg-card: #FFFFFF; /* content panels */
+  --bg-card-hover: #FFFFFF;
 
   /* Borders */
-  --border-subtle: #E0E0E0; /* neutral border */
-  --border-medium: #C0C0C0;
-  --border-focus: #000000; /* primary focus color */
+  --border-subtle: #000000; /* thin black borders */
+  --border-medium: #000000;
+  --border-focus: #000000;
 
   /* Text colors */
-  --text-primary: #000000; /* primary */
-  --text-secondary: #1A1A1A; /* secondary */
-  --text-muted: #717171; /* tertiary */
+  --text-primary: #080808; /* primary black text */
+  --text-secondary: #333333; /* secondary text */
+  --text-muted: #555555; /* muted grey */
   --text-white: #FFFFFF;
 
-  /* Primary accent colors (used for buttons, highlights) */
+  /* Primary accent colors */
   --color-primary: #000000;
-  --color-primary-hover: #1A1A1A;
-  --color-primary-bg: #F8F8F8;
-  --color-primary-border: #E0E0E0;
+  --color-primary-hover: #080808;
+  --color-primary-bg: #F0F0F0; /* light grey for hover */
+  --color-primary-border: #000000;
 
-  /* Success palette (kept unchanged) */
+  /* Success palette (unchanged) */
   --color-success: #10b981;
   --color-success-dark: #065f46;
   --color-success-bg: #ecfdf5;
@@ -52,16 +52,16 @@
   --color-purple-border: #ddd6fe;
 
   /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
 
   /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
 
   /* Typography */
   --font-sans: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -112,8 +112,9 @@ h1, h2, h3, h4, h5, h6 {
   top: 0;
   z-index: 100;
   background: var(--bg-surface);
+  color: var(--text-white);
   border-bottom: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
 }
 
 .admin-top-bar {
@@ -309,7 +310,7 @@ h1, h2, h3, h4, h5, h6 {
   background: transparent;
   font-size: 0.84rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-white);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
@@ -451,6 +452,30 @@ h1, h2, h3, h4, h5, h6 {
   gap: 12px;
 }
 
+/* Section Header for industrial design */
+.section-header {
+  background: var(--bg-surface);
+  color: var(--text-white);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.section-header h2, .section-header h3, .section-header h4 {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.section-header p {
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .view-title-group h2 {
   font-size: 1.4rem;
   font-weight: 700;
@@ -471,8 +496,8 @@ h1, h2, h3, h4, h5, h6 {
 .kpi-grid-4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 10px; /* reduced spacing */
+  margin-bottom: 12px; /* tighter */
   width: 100%;
 }
 
@@ -491,20 +516,21 @@ h1, h2, h3, h4, h5, h6 {
 .kpi-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
 }
 
-.kpi-card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: var(--border-medium);
+/* Add thin divider after KPI value */
+.kpi-card .kpi-divider {
+  border-bottom: 1px solid var(--border-subtle);
+  margin: 8px 0;
 }
+
+
+
 
 .kpi-card-top {
   display: flex;
@@ -531,8 +557,9 @@ h1, h2, h3, h4, h5, h6 {
 .kpi-badge {
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 9999px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
 }
 
 .kpi-badge.success { background: var(--color-success-bg); color: var(--color-success-dark); }
@@ -574,12 +601,12 @@ h1, h2, h3, h4, h5, h6 {
    Dashboard Visual Intelligence & Graphs Section
    ============================================================ */
 .dashboard-charts-section {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
   margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   width: 100%;
   box-sizing: border-box;
 }
@@ -664,29 +691,24 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dashboard-chart-card {
-  background: var(--bg-surface-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 16px;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
 }
 
-.dashboard-chart-card:hover {
-  background: #ffffff;
-  border-color: var(--border-medium);
-  box-shadow: var(--shadow-sm);
-}
+/* No hover effect for industrial style */
 
 .chart-metric-pill {
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 9999px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  border: 1px solid var(--color-primary-border);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
 }
 
 .chart-metric-pill.info {
@@ -900,22 +922,23 @@ h1, h2, h3, h4, h5, h6 {
    Tables & Data Presentation
    ============================================================ */
 .table-card {
-  background: var(--bg-surface);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
   overflow: hidden;
   margin-bottom: 24px;
 }
 
 .table-toolbar {
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   border-bottom: 1px solid var(--border-subtle);
   flex-wrap: wrap;
+  color: var(--text-primary);
 }
 
 .search-input-wrap {
@@ -984,29 +1007,31 @@ h1, h2, h3, h4, h5, h6 {
   border-collapse: collapse;
   text-align: left;
   font-size: 0.85rem;
+  background: var(--bg-card);
 }
 
 .modern-table th {
-  background: var(--bg-surface-secondary);
-  color: var(--text-muted);
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-weight: 600;
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 12px 16px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
 
 .modern-table td {
-  padding: 14px 16px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
   vertical-align: middle;
 }
 
 .modern-table tbody tr:hover {
-  background: var(--bg-card-hover);
+  background: var(--bg-card);
 }
 
 .modern-table tbody tr:last-child td {
@@ -1018,8 +1043,8 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px;
-  border-radius: 9999px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
@@ -1045,19 +1070,31 @@ h1, h2, h3, h4, h5, h6 {
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.table-btn:hover {
-  background: var(--bg-surface-secondary);
+/* Primary button */
+.table-btn.primary {
+  background: var(--color-primary);
+  color: #ffffff;
+  border: 1px solid var(--color-primary);
+}
+
+/* Secondary button */
+.table-btn.secondary {
+  background: var(--bg-card);
   color: var(--text-primary);
-  border-color: var(--border-medium);
+  border: 1px solid var(--text-primary);
+}
+
+/* No hover effects for industrial style */
+.table-btn:hover {
+  background: var(--bg-card);
 }
 
 .table-btn.primary {
