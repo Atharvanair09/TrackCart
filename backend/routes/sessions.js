@@ -26,11 +26,17 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const cartResult = await client.query('SELECT * FROM carts WHERE cart_id = $1', [cartId]);
+    const cartResult = await client.query('SELECT * FROM carts WHERE cart_id = $1 FOR UPDATE', [cartId]);
     if (cartResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Cart not found' });
     }
+    // Check cart status
+    if (cartResult.rows[0].status !== 'available') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Cart is already in use' });
+    }
+
 
     const activeSession = await client.query(
       "SELECT * FROM shopping_sessions WHERE cart_id = $1 AND status = 'active'",
@@ -46,6 +52,8 @@ router.post('/', async (req, res) => {
       'INSERT INTO shopping_sessions (session_id, user_id, cart_id, status, last_activity_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING *',
       [sessionId, userId || null, cartId, 'active']
     );
+    // Mark cart as occupied
+    await client.query('UPDATE carts SET status = $1 WHERE cart_id = $2', ['occupied', cartId]);
 
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
@@ -345,6 +353,8 @@ router.post('/:sessionId/cancel', async (req, res) => {
       'UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2 RETURNING *',
       ['cancelled', sessionId]
     );
+    // Release cart for reuse
+    await pool.query('UPDATE carts SET status = $1 WHERE cart_id = (SELECT cart_id FROM shopping_sessions WHERE session_id = $2)', ['available', sessionId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }

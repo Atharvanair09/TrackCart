@@ -95,7 +95,7 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         cart_id TEXT UNIQUE NOT NULL,
         device_id TEXT UNIQUE NOT NULL,
-        status TEXT DEFAULT 'active'
+        status TEXT DEFAULT 'available'
       );
 
       CREATE TABLE IF NOT EXISTS shopping_sessions (

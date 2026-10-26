@@ -128,6 +128,7 @@ function startSessionExpiryWorker() {
             `UPDATE shopping_sessions SET status = 'expired', expired_at = CURRENT_TIMESTAMP WHERE session_id = $1`,
             [sessionId]
           );
+          await sessClient.query('UPDATE carts SET status = $1 WHERE cart_id = (SELECT cart_id FROM shopping_sessions WHERE session_id = $2)', ['available', sessionId]);
         }
 
         await sessClient.query('COMMIT');

@@ -43,7 +43,7 @@ const seedCart = {
   // Must match firmware/esp8266-rfid/src/config.h DEVICE_ID so RFID events
   // resolve to the same cart the PWA pairs as CART_01.
   device_id: 'cart-001',
-  status: 'active'
+  status: 'available'
 };
 
 async function seed() {
