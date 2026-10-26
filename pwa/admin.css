@@ -3,59 +3,74 @@
    ============================================================ */
 
 :root {
-  --bg-main: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-surface-secondary: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  
-  --border-subtle: #e2e8f0;
-  --border-medium: #cbd5e1;
-  --border-focus: #3b82f6;
+  /* Background surfaces */
+  --bg-main: #FFFFFF; /* neutral background */
+  --bg-surface: #FFFFFF;
+  --bg-surface-secondary: #F5F5F5; /* light secondary surface */
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F0F0F0;
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-white: #ffffff;
+  /* Borders */
+  --border-subtle: #E0E0E0; /* neutral border */
+  --border-medium: #C0C0C0;
+  --border-focus: #000000; /* primary focus color */
 
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-bg: #eff6ff;
-  --color-primary-border: #bfdbfe;
+  /* Text colors */
+  --text-primary: #000000; /* primary */
+  --text-secondary: #1A1A1A; /* secondary */
+  --text-muted: #717171; /* tertiary */
+  --text-white: #FFFFFF;
 
+  /* Primary accent colors (used for buttons, highlights) */
+  --color-primary: #000000;
+  --color-primary-hover: #1A1A1A;
+  --color-primary-bg: #F8F8F8;
+  --color-primary-border: #E0E0E0;
+
+  /* Success palette (kept unchanged) */
   --color-success: #10b981;
   --color-success-dark: #065f46;
   --color-success-bg: #ecfdf5;
   --color-success-border: #a7f3d0;
 
+  /* Warning palette */
   --color-warning: #f59e0b;
   --color-warning-dark: #92400e;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
 
+  /* Danger palette */
   --color-danger: #ef4444;
   --color-danger-dark: #991b1b;
   --color-danger-bg: #fef2f2;
   --color-danger-border: #fecaca;
 
+  /* Purple accent (unchanged) */
   --color-purple: #8b5cf6;
   --color-purple-dark: #5b21b6;
   --color-purple-bg: #f5f3ff;
   --color-purple-border: #ddd6fe;
 
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
 
+  /* Border radius */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 18px;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Space Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Typography */
+  --font-sans: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Space Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+.font-mono { font-family: var(--font-mono) !important; }
 
 /* Base & Reset */
 *, *::before, *::after {
@@ -72,6 +87,15 @@ body.admin-body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Heading styles */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
 
 #admin-app {
   display: flex;
