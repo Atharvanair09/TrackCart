@@ -118,6 +118,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .admin-header * { color: var(--text-white) !important; }
+.admin-action-bar * { color: var(--text-white) !important; }
 
 .admin-top-bar {
   display: flex;
