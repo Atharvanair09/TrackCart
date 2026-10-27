@@ -42,7 +42,8 @@ CAM_CONSECUTIVE_FRAMES = int(os.getenv("CAM_CONSECUTIVE_FRAMES", "3"))
 CAM_CORRELATION_WINDOW = int(os.getenv("CAM_CORRELATION_WINDOW", "5"))  # seconds for backend correlation window
 CAM_API_ENDPOINT = os.getenv("CAM_API_ENDPOINT", "http://localhost:3000/api/camera/events")  # backend endpoint for camera events
 CAM_ENDPOINT = os.getenv("CAM_ENDPOINT", "http://<ESP32_IP>/capture")
-CAM_TIMEOUT = float(os.getenv("CAM_TIMEOUT", "5.0"))
+CAM_TIMEOUT = float(os.getenv("CAM_TIMEOUT", "5.0"))  # seconds, configurable timeout for HTTP requests
+CAM_STABILIZATION_FRAMES = int(os.getenv("CAM_STABILIZATION_FRAMES", "5"))  # consecutive stable frames before baseline refresh
 
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_FILE = LOG_DIR / "camera_events.log"
@@ -131,32 +132,96 @@ def run_detector(endpoint: str, reset_baseline: bool = False):
     # Establish baseline – first successful capture
     baseline_img = None
     baseline_id = None
+
+    # Only the first error in a consecutive failure streak is printed; subsequent errors are suppressed until a successful capture resets the counter
+    baseline_failures = 0
+    backoff_delay = 0.5  # initial backoff in seconds
+    max_backoff = 8.0
     while baseline_img is None:
         try:
             raw = fetch_frame(endpoint)
             baseline_img = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
             if baseline_img is None:
                 raise RuntimeError("Decode failure")
-        except Exception as e:
-            print(f"[WARN] Could not acquire baseline frame: {e}", file=sys.stderr)
-            time.sleep(1.0)
+            # Successful acquisition resets failure counter and backoff
+            baseline_failures = 0  # reset counter; only first error in a failure streak is printed  # reset counter; only first error in a failure streak is printed
+            backoff_delay = 0.5
+        except urllib.error.HTTPError as exc:
+            if baseline_failures == 0:
+                print(f"[ERROR] HTTP error {exc.code} while fetching baseline frame: {exc.reason}", file=sys.stderr)
+            baseline_failures += 1
+        except urllib.error.URLError as exc:
+            if baseline_failures == 0:
+                print(f"[ERROR] URL error while fetching baseline frame: {exc.reason}", file=sys.stderr)
+            baseline_failures += 1
+        except socket.timeout:
+            if baseline_failures == 0:
+                print(f"[ERROR] Timeout after {CAM_TIMEOUT}s while fetching baseline frame", file=sys.stderr)
+            baseline_failures += 1
+        except RuntimeError as exc:
+            if baseline_failures == 0:
+                print(f"[ERROR] Baseline decode failure: {exc}", file=sys.stderr)
+            baseline_failures += 1
+        except Exception as exc:
+            if baseline_failures == 0:
+                print(f"[WARN] Unexpected error during baseline acquisition: {exc}", file=sys.stderr)
+            baseline_failures += 1
+        # Apply exponential backoff for subsequent failures
+        if baseline_img is None:
+            backoff_delay = min(backoff_delay * 2, max_backoff)
+            time.sleep(backoff_delay)
     baseline_id = f"baseline-{datetime.utcnow().isoformat()}Z"
     print(f"Baseline captured – ID {baseline_id}")
 
     consecutive = 0
     event_emitted = False
+    in_stabilization = False
+    stabilize_counter = 0
+    prev_frame_img = None  # Track previous successful frame for stabilization
     try:
+        # Main detection loop with robust retry and exponential backoff on fetch/decode failures
+        # Only the first error in a consecutive failure streak is printed; subsequent errors are suppressed until a successful capture resets the counter
+        failure_count = 0
+        backoff_delay = 0.5
+        max_backoff = 8.0
         while True:
+            # --- Frame acquisition with detailed error categories (first error of a streak printed, then suppressed until a successful capture) ---
             try:
                 raw = fetch_frame(endpoint)
                 frame_img = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
                 if frame_img is None:
                     raise RuntimeError("Decode failure")
+                # Successful fetch/decode resets failure counters
+                failure_count = 0
+                backoff_delay = 0.5
+            except urllib.error.HTTPError as exc:
+                if failure_count == 0:
+                    print(f"[ERROR] HTTP error {exc.code} while fetching frame: {exc.reason}", file=sys.stderr)
+                failure_count += 1
+            except urllib.error.URLError as exc:
+                if failure_count == 0:
+                    print(f"[ERROR] URL error while fetching frame: {exc.reason}", file=sys.stderr)
+                failure_count += 1
+            except socket.timeout:
+                if failure_count == 0:
+                    print(f"[ERROR] Timeout after {CAM_TIMEOUT}s while fetching frame", file=sys.stderr)
+                failure_count += 1
+            except RuntimeError as exc:
+                if failure_count == 0:
+                    print(f"[ERROR] Frame decode failure: {exc}", file=sys.stderr)
+                failure_count += 1
             except Exception as exc:
-                print(f"[ERROR] Frame fetch/decode error: {exc}", file=sys.stderr)
-                time.sleep(0.5)
+                if failure_count == 0:
+                    print(f"[WARN] Unexpected error during frame acquisition: {exc}", file=sys.stderr)
+                failure_count += 1
+
+            if failure_count > 0:
+                # Apply exponential backoff before next attempt
+                backoff_delay = min(backoff_delay * 2, max_backoff)
+                time.sleep(backoff_delay)
                 continue
 
+            # --- Image difference computation ---
             try:
                 pct, changed = diff_percent(baseline_img, frame_img)
             except Exception as exc:
@@ -174,11 +239,70 @@ def run_detector(endpoint: str, reset_baseline: bool = False):
                         consecutive=consecutive,
                     )
                     event_emitted = True
+                    # Start stabilization phase after emitting event
+                    in_stabilization = True
+                    stabilize_counter = 0
+                    prev_frame_img = frame_img  # reference for consecutive comparisons
+                    print("[INFO] Scene change event emitted, entering stabilization phase")
             else:
-                # Reset consecutive counter when scene stabilises
-                if consecutive > 0:
-                    print(f"[INFO] Scene returned below threshold ({pct:.2f}%). Resetting counter.")
-                consecutive = 0
+                if in_stabilization:
+                    # Compare current frame to previous successful frame for stabilization
+                    if prev_frame_img is None:
+                        # First frame after entering stabilization; set reference frame
+                        prev_frame_img = frame_img
+                        # Do not count this frame toward stabilization
+                    else:
+                        try:
+                            stab_pct, _ = diff_percent(prev_frame_img, frame_img)
+                        except Exception as exc:
+                            print(f"[ERROR] Stabilization diff failed: {exc}", file=sys.stderr)
+                            # Do not count this frame; keep previous reference unchanged
+                            continue
+                        if stab_pct < CAM_CHANGE_PERCENT:
+                            stabilize_counter += 1
+                            print(f"[INFO] Stabilization progress: {stabilize_counter}/{CAM_STABILIZATION_FRAMES} stable frames")
+                            # Update reference for next comparison
+                            prev_frame_img = frame_img
+                            if stabilize_counter >= CAM_STABILIZATION_FRAMES:
+                                # Refresh baseline after successful stabilization
+                                print("[INFO] Stabilization achieved, refreshing baseline")
+                                # Capture new baseline frame with retry/backoff
+                                baseline_img = None
+                                baseline_failures = 0
+                                backoff_delay = 0.5
+                                while baseline_img is None:
+                                    try:
+                                        raw = fetch_frame(endpoint)
+                                        baseline_img = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
+                                        if baseline_img is None:
+                                            raise RuntimeError("Decode failure")
+                                        baseline_failures = 0
+                                        backoff_delay = 0.5
+                                    except Exception as exc:
+                                        if baseline_failures == 0:
+                                            print(f"[ERROR] Baseline refresh error: {exc}", file=sys.stderr)
+                                        baseline_failures += 1
+                                        backoff_delay = min(backoff_delay * 2, max_backoff)
+                                        time.sleep(backoff_delay)
+                                baseline_id = f"baseline-{datetime.utcnow().isoformat()}Z"
+                                print(f"Baseline refreshed – ID {baseline_id}")
+                                # Reset state for next detection cycle
+                                event_emitted = False
+                                in_stabilization = False
+                                consecutive = 0
+                                stabilize_counter = 0
+                                prev_frame_img = None
+                        else:
+                            # Unstable frame: reset stabilization counter, update reference frame
+                            stabilize_counter = 0
+                            prev_frame_img = frame_img
+                else:
+                    # Normal operation: reset consecutive counter when scene below threshold
+                    if consecutive > 0:
+                        print(f"[INFO] Scene returned below threshold ({pct:.2f}%). Resetting counter.")
+                    consecutive = 0
+                    # Update previous frame reference for potential future stabilization
+                    prev_frame_img = frame_img
 
             # Simple sleep to respect roughly 1 fps; user can adjust via env var if needed
             time.sleep(1.0)

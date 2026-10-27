@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const { initDb } = require('./db');
 const rfidRoutes = require('./routes/rfid');
+const cameraRoutes = require('./routes/camera');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,7 @@ app.get('/ops-console', (req, res) => {
 
 // Routes
 app.use('/api/rfid', rfidRoutes);
+app.use('/api/camera', cameraRoutes);
 const sessionRoutes = require('./routes/sessions');
 app.use('/api/sessions', sessionRoutes);
 const authRoutes = require('./routes/auth');
