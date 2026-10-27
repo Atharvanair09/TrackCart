@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "qrcode": "^1.5.3",
-    "web-push": "^4.0.0"
+    "web-push": "^3.6.7"
   }
 }

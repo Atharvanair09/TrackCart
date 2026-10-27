@@ -762,7 +762,7 @@ function renderInventoryTable() {
           <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${p.id}</div>
         </td>
         <td style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-secondary);">${p.rfid || 'N/A'}</td>
-        <td><span class="status-pill status-active" style="background:var(--bg-surface-secondary); color:var(--text-secondary); border-color:var(--border-subtle);">${p.category || 'General'}</span></td>
+        <td><span class="category-badge">${p.category || 'General'}</span></td>
         <td style="text-align:right; font-weight:600;">${formatCurrency(p.price)}</td>
         <td style="text-align:right; font-weight:600;">${p.onHand}</td>
         <td style="text-align:right; color:var(--color-warning-dark); font-weight:600;">${p.reserved}</td>
@@ -1606,7 +1606,7 @@ function openSessionItemsModal(session) {
     tbody.innerHTML = items.map(item => `
       <tr>
         <td style="font-weight:600;">${item.name || item.product_id}</td>
-        <td><span class="status-pill status-active">${item.category || 'General'}</span></td>
+        <td><span class="category-badge">${item.category || 'General'}</span></td>
         <td style="text-align:right; font-weight:700;">${item.quantity}</td>
         <td style="text-align:right;">${formatCurrency(item.unit_price_at_addition)}</td>
         <td style="text-align:right; font-weight:700;">${formatCurrency(item.subtotal)}</td>
@@ -1628,7 +1628,7 @@ function openSaleReceiptModal(sale) {
     tbody.innerHTML = items.map(item => `
       <tr>
         <td style="font-weight:600;">${item.name || item.product_id}</td>
-        <td><span class="status-pill status-active">${item.category || 'General'}</span></td>
+        <td><span class="category-badge">${item.category || 'General'}</span></td>
         <td style="text-align:right; font-weight:700;">${item.quantity}</td>
         <td style="text-align:right;">${formatCurrency(item.unit_price)}</td>
         <td style="text-align:right; font-weight:700;">${formatCurrency(item.line_subtotal)}</td>
