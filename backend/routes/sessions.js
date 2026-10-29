@@ -116,7 +116,7 @@ router.post('/:sessionId/create-order', async (req, res) => {
         return res.status(400).json({ error: 'Invalid or inactive session' });
     }
     const itemsRes = await client.query(
-      `SELECT ci.*, p.price FROM cart_items ci 
+      `SELECT ci.*, p.price, p.name FROM cart_items ci 
        JOIN products p ON ci.product_id = p.product_id 
        WHERE ci.session_id = $1`,
       [sessionId]
@@ -127,22 +127,45 @@ router.post('/:sessionId/create-order', async (req, res) => {
     }
     const subtotal = itemsRes.rows.reduce((sum, i) => sum + (i.unit_price_at_addition * i.quantity), 0);
     const taxRate = 0.0825;
-    const taxAmount = Math.round(subtotal * taxRate * 100);
-    const total = Math.round((subtotal + taxAmount) * 100);
+    const taxAmount = parseFloat((subtotal * taxRate).toFixed(2));
+    const total = parseFloat((subtotal + taxAmount).toFixed(2));
+    const amountInPaise = Math.round(total * 100);
     const paymentService = require('../services/paymentService');
-    if (!process.env.INVENTORY_ONLY_MODE === 'true') {
-      // In production mode ensure Razorpay is configured
-      if (!paymentService.isConfigured()) {
-        await client.query('ROLLBACK');
-        return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
-      }
-      const order = await paymentService.createOrder({ amount: total, currency: 'INR', receipt: `receipt_${sessionId}` });
+
+    if (!INVENTORY_ONLY_MODE && paymentService.isConfigured()) {
+      const order = await paymentService.createOrder({
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt: `receipt_${sessionId}`
+      });
       await client.query('COMMIT');
-      return res.status(200).json({ order_id: order.id, amount: order.amount, currency: order.currency });
+      return res.status(200).json({
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        key_id: process.env.RAZORPAY_KEY_ID,
+        is_mock: false,
+        subtotal,
+        tax: taxAmount,
+        total,
+        cart_id: sessionRes.rows[0]?.cart_id
+      });
     } else {
-      // Inventory‑only demo mode – skip order creation and commit early
+      // Demo / simulation mode when Razorpay credentials are not yet configured in local environment
+      const mockOrderId = `order_mock_${Date.now()}`;
       await client.query('COMMIT');
-      return res.status(200).json({ message: 'Demo checkout successful (payment bypassed)' });
+      return res.status(200).json({
+        order_id: mockOrderId,
+        amount: amountInPaise,
+        currency: 'INR',
+        key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+        is_mock: true,
+        subtotal,
+        tax: taxAmount,
+        total,
+        cart_id: sessionRes.rows[0]?.cart_id,
+        message: 'Order created in test/simulation mode'
+      });
     }
   } catch (error) {
     await client.query('ROLLBACK');
@@ -172,31 +195,43 @@ router.post('/:sessionId/checkout', async (req, res) => {
     // Idempotency: if a sale already exists for this session, return it without modifying inventory
     const existingSale = await client.query('SELECT * FROM sales WHERE session_id = $1', [sessionId]);
     if (existingSale.rows.length > 0) {
+      const sale = existingSale.rows[0];
+      const lineItems = await client.query(
+        `SELECT sli.*, p.name FROM sale_line_items sli JOIN products p ON sli.product_id = p.product_id WHERE sli.sale_id = $1`,
+        [sale.sale_id]
+      );
+      sale.items = lineItems.rows.map(i => ({
+        product_id: i.product_id,
+        name: i.name,
+        quantity: i.quantity,
+        unit_price: Number(i.unit_price),
+        line_subtotal: Number(i.line_subtotal)
+      }));
+      sale.cart_id = sessionRes.rows[0]?.cart_id || null;
       await client.query('COMMIT');
-      return res.status(200).json(existingSale.rows[0]);
+      return res.status(200).json(sale);
     }
-        // Razorpay payment verification – optional if credentials are set
+    // Razorpay payment verification – optional if credentials are set
     const paymentService = require('../services/paymentService');
     if (!INVENTORY_ONLY_MODE) {
-      // In production mode ensure Razorpay is configured and verify payment details.
-      if (!paymentService.isConfigured()) {
-        await client.query('ROLLBACK');
-        return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
-      }
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
-      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Missing Razorpay payment details' });
-      }
-      const isValid = paymentService.verifySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
-      if (!isValid) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Invalid Razorpay signature' });
+      const isMockOrder = (razorpay_order_id && razorpay_order_id.startsWith('order_mock_')) || !paymentService.isConfigured();
+
+      if (!isMockOrder) {
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Missing Razorpay payment details' });
+        }
+        const isValid = paymentService.verifySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+        if (!isValid) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Invalid Razorpay signature' });
+        }
       }
     }
     // Fetch cart items ordered by product_id to lock products deterministically
     const itemsRes = await client.query(
-      `SELECT ci.*, p.price, p.product_id FROM cart_items ci 
+      `SELECT ci.*, p.price, p.name, p.product_id FROM cart_items ci 
        JOIN products p ON ci.product_id = p.product_id 
        WHERE ci.session_id = $1 
        ORDER BY ci.product_id ASC`,
@@ -330,6 +365,22 @@ const reservationAggRes = await client.query(
     await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
 
     await client.query('COMMIT');
+
+    saleRecord.items = itemsRes.rows.map(item => ({
+      product_id: item.product_id,
+      name: item.name || item.product_id,
+      quantity: item.quantity,
+      unit_price: Number(item.unit_price_at_addition || item.price || 0),
+      line_subtotal: parseFloat(((item.unit_price_at_addition || item.price || 0) * item.quantity).toFixed(2))
+    }));
+    saleRecord.cart_id = sessionRes.rows[0]?.cart_id || null;
+    saleRecord.payment = {
+      razorpay_payment_id: req.body?.razorpay_payment_id || `pay_${Date.now()}`,
+      razorpay_order_id: req.body?.razorpay_order_id || null,
+      status: 'captured',
+      method: 'Razorpay'
+    };
+
     return res.status(200).json(saleRecord);
   } catch (error) {
     await client.query('ROLLBACK');

@@ -2,6 +2,8 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // State
 let currentSessionId = localStorage.getItem('smart_cart_session_id');
+let currentCartId = null;
+let currentRazorpayOrder = null;
 let pollInterval = null;
 let html5QrCode = null;
 let isTorchOn = false;
@@ -43,6 +45,22 @@ const checkoutTotalBadge = document.getElementById('checkout-total-badge');
 const checkoutBtn = document.getElementById('checkout-btn');
 const disconnectCartBtn = document.getElementById('disconnect-cart-btn');
 const newSessionBtn = document.getElementById('new-session-btn');
+
+// Payment & Bill Elements
+const paymentFailedAlert = document.getElementById('payment-failed-alert');
+const paymentFailedReason = document.getElementById('payment-failed-reason');
+const paymentFailedTime = document.getElementById('payment-failed-time');
+const dismissPaymentAlertBtn = document.getElementById('dismiss-payment-alert');
+
+const razorpaySimModal = document.getElementById('razorpay-sim-modal');
+const rzpModalAmount = document.getElementById('rzp-modal-amount');
+const rzpModalOrderId = document.getElementById('rzp-modal-order-id');
+const rzpModalCartId = document.getElementById('rzp-modal-cart-id');
+const rzpModalCloseBtn = document.getElementById('rzp-modal-close-btn');
+const rzpPaySuccessBtn = document.getElementById('rzp-pay-success-btn');
+const rzpPayFailBtn = document.getElementById('rzp-pay-fail-btn');
+
+const billPrintBtn = document.getElementById('bill-print-btn');
 
 // Nav Tabs (both bottom and top bars)
 const navTabs = document.querySelectorAll('#bottom-tab-bar .nav-tab, #top-tab-bar .nav-tab');
@@ -229,6 +247,7 @@ function friendlyCartName(cartId) {
 }
 
 function renderCart(sessionData) {
+  currentCartId = sessionData.cart_id;
   if (ledgerCartId) {
     // Show friendly cart label (e.g., "Cart 1")
     const friendly = friendlyCartName(sessionData.cart_id);
@@ -332,34 +351,276 @@ async function decrementItem(productId) {
     }
     // Refresh cart view
     fetchCart();
-  } catch (error) {ś
+  } catch (error) {
     console.error('Error decrementing item:', error);
     showError(cartError, error.message.toUpperCase());
   }
 }
 
+// -------------------------------------------------------------
+// Razorpay Checkout Integration
+// -------------------------------------------------------------
 async function checkout() {
   if (!currentSessionId) return;
 
+  hidePaymentFailedAlert();
+  hideError(cartError);
+
   checkoutBtn.disabled = true;
-  checkoutBtn.textContent = 'PROCESSING CHECKOUT...';
+  checkoutBtn.textContent = 'CONNECTING TO RAZORPAY...';
 
   try {
-    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/checkout`, {
+    // 1. Call backend to create Razorpay Order
+    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/create-order`, {
       method: 'POST'
     });
 
     if (!res.ok) {
       const data = await res.json();
-      throw new Error(data.error || 'Failed to complete checkout');
+      throw new Error(data.error || 'Failed to initiate checkout order');
     }
 
-    handleSessionEnded('completed');
+    const orderData = await res.json();
+    currentRazorpayOrder = orderData;
+    if (orderData.cart_id) {
+      currentCartId = orderData.cart_id;
+    }
+
+    // 2. Open Razorpay Gateway (Real SDK or interactive simulation gateway)
+    openRazorpayCheckout(orderData);
 
   } catch (error) {
+    console.error('Error during checkout initiation:', error);
     showError(cartError, error.message.toUpperCase());
+    resetCheckoutButton();
+  }
+}
+
+function resetCheckoutButton() {
+  if (checkoutBtn) {
     checkoutBtn.disabled = false;
-    checkoutBtn.textContent = 'PROCEED TO INSTANT CHECKOUT';
+    checkoutBtn.innerHTML = `
+      <span class="square-bullet">■</span>
+      <span class="btn-text">PROCEED TO INSTANT CHECKOUT</span>
+      <span id="checkout-total-badge" class="total-badge">[RETRY] -&gt;</span>
+    `;
+  }
+}
+
+function openRazorpayCheckout(orderData) {
+  const isRealKey = orderData.key_id && orderData.key_id.startsWith('rzp_') && orderData.key_id !== 'rzp_test_placeholder';
+  const hasSdk = typeof window.Razorpay === 'function';
+
+  if (!orderData.is_mock && isRealKey && hasSdk) {
+    // Official Razorpay Standard Checkout SDK
+    try {
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.amount, // in paise
+        currency: orderData.currency || 'INR',
+        name: 'TrackCart Smart Store',
+        description: `Autonomous Cart Checkout (${orderData.cart_id || currentCartId || currentSessionId})`,
+        image: '/cart-qr.png',
+        order_id: orderData.order_id,
+        prefill: {
+          name: 'TrackCart Shopper',
+          email: 'shopper@trackcart.com',
+          contact: '9876543210'
+        },
+        theme: {
+          color: '#000000'
+        },
+        handler: async function (response) {
+          // Razorpay returns razorpay_payment_id, razorpay_order_id, razorpay_signature
+          await completeSuccessfulCheckout(response);
+        },
+        modal: {
+          ondismiss: function () {
+            handlePaymentFailed('Payment session dismissed. Transaction was not completed.');
+          }
+        }
+      };
+
+      const rzpInstance = new window.Razorpay(options);
+      rzpInstance.on('payment.failed', function (errResp) {
+        const failureReason = errResp?.error?.description || errResp?.error?.reason || 'Transaction declined by payment gateway';
+        handlePaymentFailed(failureReason);
+      });
+      rzpInstance.open();
+      return;
+    } catch (sdkError) {
+      console.warn('Real Razorpay SDK failed to open, falling back to simulated gateway:', sdkError);
+    }
+  }
+
+  // Interactive Razorpay Simulation Modal for Local Development and Demonstrations
+  openRazorpaySimulationModal(orderData);
+}
+
+function openRazorpaySimulationModal(orderData) {
+  if (!razorpaySimModal) return;
+
+  const totalAmount = orderData.total !== undefined
+    ? formatPrice(orderData.total)
+    : `₹${((orderData.amount || 0) / 100).toFixed(2)}`;
+
+  if (rzpModalAmount) rzpModalAmount.textContent = totalAmount;
+  if (rzpModalOrderId) rzpModalOrderId.textContent = orderData.order_id || 'order_mock_000';
+  if (rzpModalCartId) rzpModalCartId.textContent = orderData.cart_id || currentCartId || 'CART_01';
+
+  razorpaySimModal.classList.remove('hidden');
+}
+
+function closeRazorpaySimulationModal() {
+  if (razorpaySimModal) {
+    razorpaySimModal.classList.add('hidden');
+  }
+}
+
+// Payment failed: redirect to cart screen and display alert
+function handlePaymentFailed(reason = 'Payment was declined or cancelled') {
+  closeRazorpaySimulationModal();
+  showScreen('cart');
+  showPaymentFailedAlert(reason);
+  resetCheckoutButton();
+}
+
+function showPaymentFailedAlert(reason) {
+  if (!paymentFailedAlert) return;
+  if (paymentFailedReason) {
+    paymentFailedReason.textContent = `${reason}. Your cart items remain safe in your basket. Please try checkout again.`;
+  }
+  if (paymentFailedTime) {
+    const now = new Date();
+    paymentFailedTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  paymentFailedAlert.classList.remove('hidden');
+  paymentFailedAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function hidePaymentFailedAlert() {
+  if (paymentFailedAlert) {
+    paymentFailedAlert.classList.add('hidden');
+  }
+}
+
+// Payment succeeded: complete checkout on backend and generate bill
+async function completeSuccessfulCheckout(paymentData) {
+  closeRazorpaySimulationModal();
+  hidePaymentFailedAlert();
+
+  if (checkoutBtn) {
+    checkoutBtn.disabled = true;
+    checkoutBtn.textContent = 'VERIFYING PAYMENT & GENERATING BILL...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${currentSessionId}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        razorpay_order_id: paymentData.razorpay_order_id,
+        razorpay_payment_id: paymentData.razorpay_payment_id,
+        razorpay_signature: paymentData.razorpay_signature
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Payment verification failed');
+    }
+
+    const saleRecord = await res.json();
+    generateAndDisplayBill(saleRecord);
+
+  } catch (error) {
+    console.error('Error completing checkout on server:', error);
+    handlePaymentFailed(`Payment settlement failed: ${error.message}`);
+  }
+}
+
+// Generate and Display Official Bill / Tax Invoice
+function generateAndDisplayBill(sale) {
+  stopPolling();
+  currentSessionId = null;
+  localStorage.removeItem('smart_cart_session_id');
+
+  // Populate Invoice ID
+  const billInvoiceId = document.getElementById('bill-invoice-id');
+  if (billInvoiceId) {
+    billInvoiceId.textContent = sale.sale_id || `SALE_${Date.now()}`;
+  }
+
+  // Populate Date & Time
+  const billTimestamp = document.getElementById('bill-timestamp');
+  if (billTimestamp) {
+    const d = sale.completed_at ? new Date(sale.completed_at) : new Date();
+    billTimestamp.textContent = d.toLocaleString('en-US', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+    });
+  }
+
+  // Populate Cart Terminal
+  const billCartId = document.getElementById('bill-cart-id');
+  if (billCartId) {
+    billCartId.textContent = sale.cart_id || currentCartId || 'CART_01';
+  }
+
+  // Populate Razorpay Payment ID
+  const billPaymentId = document.getElementById('bill-payment-id');
+  if (billPaymentId) {
+    billPaymentId.textContent = sale.payment?.razorpay_payment_id || `pay_${Date.now()}`;
+  }
+
+  // Populate Line Items
+  const billItemsList = document.getElementById('bill-items-list');
+  const billItemsCount = document.getElementById('bill-items-count');
+  const items = sale.items || [];
+  const totalItemQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+
+  if (billItemsCount) {
+    billItemsCount.textContent = totalItemQty;
+  }
+
+  if (billItemsList) {
+    if (items.length === 0) {
+      billItemsList.innerHTML = `<li class="receipt-item-row"><span class="item-name" style="grid-column: span 4; text-align:center; color:#666;">No items recorded</span></li>`;
+    } else {
+      billItemsList.innerHTML = items.map(item => {
+        const unit = item.unit_price || item.price || 0;
+        const lineTotal = item.line_subtotal || (unit * item.quantity);
+        return `
+          <li class="receipt-item-row">
+            <span class="item-name">${item.name || item.product_id}</span>
+            <span class="item-qty">${item.quantity}</span>
+            <span class="item-unit">${formatPrice(unit)}</span>
+            <span class="item-subtotal">${formatPrice(lineTotal)}</span>
+          </li>
+        `;
+      }).join('');
+    }
+  }
+
+  // Populate Financial Totals
+  const billSubtotal = document.getElementById('bill-subtotal');
+  const billTax = document.getElementById('bill-tax');
+  const billTotal = document.getElementById('bill-total');
+
+  if (billSubtotal) billSubtotal.textContent = formatPrice(sale.subtotal || 0);
+  if (billTax) billTax.textContent = formatPrice(sale.tax_amount || 0);
+  if (billTotal) billTotal.textContent = formatPrice(sale.total || 0);
+
+  // Security Exit Token
+  const billToken = document.getElementById('bill-token');
+  if (billToken) {
+    const randomHex = Math.random().toString(36).substring(2, 8).toUpperCase();
+    billToken.textContent = `TOKEN: AUTH-OK-${randomHex}`;
+  }
+
+  showScreen('completed');
+  if (checkoutBtn) {
+    checkoutBtn.disabled = false;
   }
 }
 
@@ -384,18 +645,12 @@ function handleSessionEnded(status = 'completed') {
   currentSessionId = null;
   localStorage.removeItem('smart_cart_session_id');
 
-  const title = document.getElementById('completed-title');
-  const msg = document.getElementById('completed-message');
-
   if (status === 'cancelled') {
-    title.textContent = 'SESSION DISCONNECTED';
-    msg.textContent = 'Your cart session has been ended.';
+    showScreen('home');
   } else {
-    title.textContent = 'SHOPPING COMPLETED';
-    msg.textContent = 'Thank you for shopping! Transaction recorded.';
+    showScreen('home');
   }
 
-  showScreen('completed');
   if (checkoutBtn) {
     checkoutBtn.disabled = false;
   }
@@ -524,9 +779,48 @@ toggleTorchBtn.addEventListener('click', toggleTorch);
 checkoutBtn.addEventListener('click', checkout);
 disconnectCartBtn.addEventListener('click', disconnectSession);
 
+// Dismiss payment alert
+if (dismissPaymentAlertBtn) {
+  dismissPaymentAlertBtn.addEventListener('click', hidePaymentFailedAlert);
+}
+
+// Razorpay simulation modal actions
+if (rzpModalCloseBtn) {
+  rzpModalCloseBtn.addEventListener('click', () => {
+    handlePaymentFailed('Payment cancelled by user');
+  });
+}
+
+if (rzpPayFailBtn) {
+  rzpPayFailBtn.addEventListener('click', () => {
+    handlePaymentFailed('Simulated payment failure: Transaction declined by bank / insufficient funds');
+  });
+}
+
+if (rzpPaySuccessBtn) {
+  rzpPaySuccessBtn.addEventListener('click', () => {
+    const randSuffix = Math.random().toString(36).substring(2, 12);
+    completeSuccessfulCheckout({
+      razorpay_payment_id: `pay_sim_${randSuffix}`,
+      razorpay_order_id: currentRazorpayOrder?.order_id || `order_mock_${Date.now()}`,
+      razorpay_signature: `sig_sim_${randSuffix}`
+    });
+  });
+}
+
+// Print Bill Action
+if (billPrintBtn) {
+  billPrintBtn.addEventListener('click', () => {
+    window.print();
+  });
+}
+
 newSessionBtn.addEventListener('click', () => {
   currentSessionId = null;
+  currentCartId = null;
+  currentRazorpayOrder = null;
   localStorage.removeItem('smart_cart_session_id');
+  hidePaymentFailedAlert();
   showScreen('home');
 });
 

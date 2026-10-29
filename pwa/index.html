@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="src/assets/logo.png" type="image/png">
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js" type="text/javascript"></script>
   </head>
   <body>
     <div id="app">
@@ -373,6 +374,22 @@
 
         <div id="cart-error" class="hud-error-msg hidden font-mono"></div>
 
+        <!-- Payment Unsuccessful Notification Alert Banner -->
+        <div id="payment-failed-alert" class="hud-payment-alert hidden font-mono">
+          <div class="alert-icon-col">
+            <span class="alert-symbol">✕</span>
+          </div>
+          <div class="alert-text-col">
+            <div class="alert-badge-row">
+              <span class="alert-pill">PAYMENT FAILED</span>
+              <span class="alert-time" id="payment-failed-time">Just now</span>
+            </div>
+            <h4 class="alert-heading">PAYMENT UNSUCCESSFUL</h4>
+            <p id="payment-failed-reason" class="alert-detail">Your transaction could not be processed. Your items remain in the cart. Please try checkout again.</p>
+          </div>
+          <button id="dismiss-payment-alert" class="alert-dismiss-btn" title="Dismiss Alert">✕</button>
+        </div>
+
         <div class="cart-dashboard-grid">
           <div class="cart-col-left">
             <!-- Empty State -->
@@ -426,13 +443,177 @@
         </div>
       </div>
 
-      <!-- 4. COMPLETED / ENDED SESSION VIEW -->
+      <!-- 4. COMPLETED / GENERATED BILL & TAX INVOICE VIEW -->
       <div id="completed-screen" class="screen hidden">
-        <div class="hud-box text-center p-8">
-          <div class="success-icon-box">✓</div>
-          <h2 id="completed-title" class="font-mono">SESSION COMPLETED</h2>
-          <p id="completed-message" class="font-mono mt-2 text-sm text-secondary">Thank you for shopping with us!</p>
-          <button id="new-session-btn" class="hud-btn-dark font-mono mt-6">START NEW SESSION</button>
+        <div class="bill-screen-container font-mono">
+          <!-- Digital Bill / Official Tax Invoice -->
+          <div id="receipt-card" class="receipt-card">
+            <div class="receipt-cutout-top"></div>
+            
+            <div class="receipt-header text-center">
+              <div class="store-brand-pill">⚡ TRACKCART AUTONOMOUS RETAIL</div>
+              <h1 class="receipt-title">OFFICIAL TAX INVOICE</h1>
+              <p class="receipt-subtitle">DUAL-ZONE INFRARED RFID SMART STORE #082</p>
+              <div class="receipt-paid-badge">
+                <span class="check-icon">✓</span> PAYMENT VERIFIED & PAID
+              </div>
+            </div>
+
+            <div class="receipt-dash-divider">================================================</div>
+
+            <!-- Invoice Metadata Grid -->
+            <div class="receipt-meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">INVOICE NO:</span>
+                <span id="bill-invoice-id" class="meta-value">SALE_PENDING</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">DATE & TIME:</span>
+                <span id="bill-timestamp" class="meta-value">--/--/---- --:--:--</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">CART TERMINAL:</span>
+                <span id="bill-cart-id" class="meta-value">CART_01</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">PAYMENT GATEWAY:</span>
+                <span class="meta-value">RAZORPAY SECURE</span>
+              </div>
+              <div class="meta-item full-row">
+                <span class="meta-label">RAZORPAY PAY ID:</span>
+                <span id="bill-payment-id" class="meta-value highlight-pay">pay_xxxxxxxxxxxxxx</span>
+              </div>
+            </div>
+
+            <div class="receipt-dash-divider">------------------------------------------------</div>
+
+            <!-- Line Items Table -->
+            <div class="receipt-table-header">
+              <span class="col-name">ITEM / SKU</span>
+              <span class="col-qty">QTY</span>
+              <span class="col-unit">PRICE</span>
+              <span class="col-total">AMOUNT</span>
+            </div>
+            
+            <ul id="bill-items-list" class="receipt-items-list">
+              <!-- Dynamically injected bill line items -->
+            </ul>
+
+            <div class="receipt-dash-divider">------------------------------------------------</div>
+
+            <!-- Financial Summary -->
+            <div class="receipt-summary-block">
+              <div class="summary-line">
+                <span>SUBTOTAL (<span id="bill-items-count">0</span> ITEMS)</span>
+                <strong id="bill-subtotal">$0.00</strong>
+              </div>
+              <div class="summary-line">
+                <span>SALES TAX (8.25%)</span>
+                <strong id="bill-tax">$0.00</strong>
+              </div>
+              <div class="summary-divider-dotted">------------------------------------------------</div>
+              <div class="summary-line grand-total-line">
+                <span class="grand-total-label">TOTAL PAID:</span>
+                <h2 id="bill-total" class="grand-total-value">$0.00</h2>
+              </div>
+            </div>
+
+            <div class="receipt-dash-divider">================================================</div>
+
+            <!-- Verification & Gate Clearance -->
+            <div class="receipt-exit-verification text-center">
+              <div class="clearance-tag">■ STORE EXIT CLEARANCE GRANTED</div>
+              <div class="digital-barcode" id="bill-barcode">
+                |||| | ||||| |||| | |||||| ||| ||||||| | ||||| | ||||
+              </div>
+              <div class="barcode-subtext" id="bill-token">TOKEN: AUTH-OK-99201</div>
+              <p class="exit-instruction">Please present this digital receipt or barcode at the automated exit turnstile if requested.</p>
+            </div>
+          </div>
+
+          <!-- Bill Action Buttons -->
+          <div class="bill-actions-panel no-print">
+            <button id="bill-print-btn" class="hud-btn-bill-action btn-print">
+              <span class="btn-icon">🖨️</span> PRINT / SAVE BILL (PDF)
+            </button>
+            <button id="new-session-btn" class="hud-btn-bill-action btn-new-session">
+              <span class="btn-icon">🔄</span> START NEW SHOPPING SESSION
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Razorpay Simulated Checkout Modal (For Local Test & Demo Mode) -->
+      <div id="razorpay-sim-modal" class="modal-overlay hidden">
+        <div class="rzp-modal-card font-mono">
+          <!-- Razorpay Header -->
+          <div class="rzp-header">
+            <div class="rzp-logo-wrap">
+              <div class="rzp-logo-badge">R</div>
+              <div>
+                <div class="rzp-brand-name">Razorpay</div>
+                <div class="rzp-trusted-tag">🔒 Trusted Payment Gateway</div>
+              </div>
+            </div>
+            <button id="rzp-modal-close-btn" class="rzp-btn-close" title="Cancel Checkout">✕</button>
+          </div>
+
+          <!-- Merchant & Order Details -->
+          <div class="rzp-order-strip">
+            <div>
+              <div class="rzp-muted-label">MERCHANT</div>
+              <strong class="rzp-store-name">TrackCart Smart Autonomous Store</strong>
+            </div>
+            <div class="rzp-price-box">
+              <div class="rzp-muted-label">AMOUNT DUE</div>
+              <h2 id="rzp-modal-amount" class="rzp-amount">₹0.00</h2>
+            </div>
+          </div>
+
+          <div class="rzp-meta-chips">
+            <span class="rzp-chip">ORDER: <strong id="rzp-modal-order-id">order_...</strong></span>
+            <span class="rzp-chip">CART: <strong id="rzp-modal-cart-id">CART_01</strong></span>
+          </div>
+
+          <!-- Payment Options -->
+          <div class="rzp-options-group">
+            <div class="rzp-options-label">SELECT PAYMENT METHOD</div>
+            <div class="rzp-option-item active">
+              <div class="option-icon">⚡</div>
+              <div class="option-text">
+                <strong>Instant UPI / QR Code</strong>
+                <span>Google Pay • PhonePe • Paytm • BHIM</span>
+              </div>
+              <span class="option-badge">INSTANT</span>
+            </div>
+            <div class="rzp-option-item">
+              <div class="option-icon">💳</div>
+              <div class="option-text">
+                <strong>Credit / Debit Card</strong>
+                <span>Visa • Mastercard • RuPay</span>
+              </div>
+            </div>
+            <div class="rzp-option-item">
+              <div class="option-icon">🏦</div>
+              <div class="option-text">
+                <strong>Netbanking</strong>
+                <span>All Indian Banks Supported</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simulation Actions -->
+          <div class="rzp-actions">
+            <button id="rzp-pay-success-btn" class="rzp-btn-success">
+              ✓ SIMULATE SUCCESSFUL PAYMENT
+            </button>
+            <button id="rzp-pay-fail-btn" class="rzp-btn-failure">
+              ✕ SIMULATE PAYMENT FAILURE
+            </button>
+          </div>
+          <div class="rzp-footer-note">
+            Razorpay Web Checkout &bull; End-to-End Encrypted &bull; PCI-DSS
+          </div>
         </div>
       </div>
 
