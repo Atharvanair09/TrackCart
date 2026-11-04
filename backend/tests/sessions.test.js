@@ -54,7 +54,7 @@ describe('Session APIs', () => {
           return Promise.resolve({ rows: [{ user_id: 'USER123' }] });
         }
         if (queryText.includes('FROM carts')) {
-          return Promise.resolve({ rows: [{ cart_id: 'CART_01' }] });
+          return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'available' }] });
         }
         if (queryText.includes('FROM shopping_sessions') && queryText.includes('SELECT')) {
           return Promise.resolve({ rows: [] }); // No active session
@@ -99,7 +99,7 @@ describe('Session APIs', () => {
       mockClient.query.mockImplementation((queryText, params) => {
         if (queryText.includes('BEGIN')) return Promise.resolve();
         if (queryText.includes('FROM users')) return Promise.resolve({ rows: [{ user_id: 'USER123' }] });
-        if (queryText.includes('FROM carts')) return Promise.resolve({ rows: [{ cart_id: 'CART_01' }] });
+        if (queryText.includes('FROM carts')) return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'available' }] });
         if (queryText.includes('FROM shopping_sessions') && queryText.includes('SELECT')) {
           return Promise.resolve({ rows: [{ session_id: 'SESS_EXISTING', status: 'active' }] });
         }
@@ -148,6 +148,9 @@ describe('Session APIs', () => {
           });
         }
 
+        if (queryText.includes('FROM carts') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'active' }] });
+        }
         if (queryText.includes('SELECT * FROM sales')) {
           return Promise.resolve({ rows: [] }); // No existing sale
         }
@@ -281,6 +284,9 @@ describe('Session APIs', () => {
         }
         if (queryText.includes('SELECT * FROM shopping_sessions')) {
           return Promise.resolve({ rows: [{ session_id: 'SESS_TEST', status: 'active' }] });
+        }
+        if (queryText.includes('FROM carts') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'active' }] });
         }
         if (queryText.includes('SELECT * FROM cart_items')) {
           return Promise.resolve({ rows: [] });
@@ -558,5 +564,72 @@ describe('Session APIs', () => {
   );
   expect(inventoryCalls).toHaveLength(1);
 });
+
+  // New tests for completed-session handling
+  describe('POST /api/sessions/:sessionId/checkout completed session handling', () => {
+    test('should reject checkout for completed session without sale', async () => {
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_COMPLETED', status: 'completed' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [] }); // no sale
+        }
+        // any other queries resolve trivially
+        return Promise.resolve({ rows: [], rowCount: 1 });
+      });
+      const res = await request(app).post('/api/sessions/SESS_COMPLETED/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('Completed session without sale');
+    });
+
+    test('should return existing sale for completed session with sale (idempotent)', async () => {
+      const existingSale = { sale_id: 'SALE_EXIST', subtotal: 20, tax_rate: 0.0825, tax_amount: 1.65, total: 21.65 };
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_EXIST', cart_id: 'CART_01', status: 'completed' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [existingSale] });
+        }
+        if (queryText.includes('FROM carts') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'occupied' }] });
+        }
+        // other queries resolve trivially
+        return Promise.resolve({ rows: [], rowCount: 1 });
+      });
+      const res = await request(app).post('/api/sessions/SESS_EXIST/checkout').send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.sale_id).toBe('SALE_EXIST');
+      const saleInsertCalls = mockClient.query.mock.calls.filter(call => call[0].includes('INSERT INTO sales'));
+      expect(saleInsertCalls).toHaveLength(0);
+    });
+    test('should not release cart when another active session owns it', async () => {
+      const existingSale = { sale_id: 'SALE_EXIST2', subtotal: 30, tax_rate: 0.0825, tax_amount: 2.475, total: 32.475 };
+      mockClient.query.mockImplementation((queryText, params) => {
+        if (queryText.includes('FROM shopping_sessions') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ session_id: 'SESS_EXIST2', cart_id: 'CART_01', status: 'completed' }] });
+        }
+        if (queryText.includes('SELECT * FROM sales')) {
+          return Promise.resolve({ rows: [existingSale] });
+        }
+        if (queryText.includes('FROM carts') && queryText.includes('FOR UPDATE')) {
+          return Promise.resolve({ rows: [{ cart_id: 'CART_01', status: 'occupied' }] });
+        }
+        // Simulate another active session owning the cart
+        if (queryText.includes('SELECT session_id FROM shopping_sessions WHERE cart_id = $1 AND status = $2 AND session_id <> $3')) {
+          return Promise.resolve({ rows: [{ session_id: 'OTHER_ACTIVE' }] });
+        }
+        return Promise.resolve({ rows: [], rowCount: 1 });
+      });
+      const res = await request(app).post('/api/sessions/SESS_EXIST2/checkout')
+        .send({ razorpay_order_id: 'order_123', razorpay_payment_id: 'pay_123', razorpay_signature: 'sig_abc' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.sale_id).toBe('SALE_EXIST2');
+      // Ensure cart not released due to other active session
+      const cartUpdateCalls = mockClient.query.mock.calls.filter(call => call[0].includes('UPDATE carts SET status'));
+      expect(cartUpdateCalls).toHaveLength(0);
+    });
+  });
 });
 });

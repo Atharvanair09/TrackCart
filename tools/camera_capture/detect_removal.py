@@ -40,8 +40,9 @@ CAM_DIFF_THRESHOLD = int(os.getenv("CAM_DIFF_THRESHOLD", "30"))  # pixel intensi
 CAM_CHANGE_PERCENT = float(os.getenv("CAM_CHANGE_PERCENT", "2.0"))  # % of changed pixels to consider "significant"
 CAM_CONSECUTIVE_FRAMES = int(os.getenv("CAM_CONSECUTIVE_FRAMES", "3"))
 CAM_CORRELATION_WINDOW = int(os.getenv("CAM_CORRELATION_WINDOW", "5"))  # seconds for backend correlation window
-CAM_API_ENDPOINT = os.getenv("CAM_API_ENDPOINT", "http://localhost:3000/api/camera/events")  # backend endpoint for camera events
+CAM_API_ENDPOINT = os.getenv("CAM_API_ENDPOINT", "https://trackcart-vkf6.onrender.com/api/camera/events")  # backend endpoint for camera events
 CAM_ENDPOINT = os.getenv("CAM_ENDPOINT", "http://<ESP32_IP>/capture")
+CAM_DEVICE_ID = os.getenv("CAM_DEVICE_ID", "cart-002")  # identifier for this camera device
 CAM_TIMEOUT = float(os.getenv("CAM_TIMEOUT", "5.0"))  # seconds, configurable timeout for HTTP requests
 CAM_STABILIZATION_FRAMES = int(os.getenv("CAM_STABILIZATION_FRAMES", "5"))  # consecutive stable frames before baseline refresh
 
@@ -116,6 +117,7 @@ def log_event(event_type: str, baseline_id: str, diff_score: float, consecutive:
         "eventId": str(uuid.uuid4()),
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "type": event_type,
+        "deviceId": CAM_DEVICE_ID,
         "baselineId": baseline_id,
         "diffScore": diff_score,
         "consecutiveFrames": consecutive,
@@ -124,6 +126,7 @@ def log_event(event_type: str, baseline_id: str, diff_score: float, consecutive:
     with LOG_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
     print(f"[EVENT] {event_type.upper()} emitted – diff {diff_score:.2f}% over {consecutive} frames")
+    return event
 
 # ---------------------------------------------------------------------------
 # Main detection loop
@@ -232,18 +235,30 @@ def run_detector(endpoint: str, reset_baseline: bool = False):
                 consecutive += 1
                 print(f"[INFO] Change detected – {pct:.2f}% (consecutive {consecutive})")
                 if not event_emitted and consecutive >= CAM_CONSECUTIVE_FRAMES:
-                    log_event(
+                    # Log event and obtain the full event dict
+                    event = log_event(
                         event_type="candidate_removal",
                         baseline_id=baseline_id,
                         diff_score=pct,
                         consecutive=consecutive,
                     )
+                    # Attempt to deliver the event to the backend (retries handled inside send_event)
+                    try:
+                        send_success = send_event(event)
+                    except Exception as exc:
+                        print(f"[ERROR] Unexpected error during backend delivery: {exc}", file=sys.stderr)
+                        send_success = False
+                    if send_success:
+                        print("[DELIVERY] Event successfully delivered to backend")
+                    else:
+                        print("[DELIVERY] Backend delivery failed after retries", file=sys.stderr)
+                    # Mark event as emitted and start stabilization phase
                     event_emitted = True
-                    # Start stabilization phase after emitting event
                     in_stabilization = True
                     stabilize_counter = 0
-                    prev_frame_img = frame_img  # reference for consecutive comparisons
+                    prev_frame_img = frame_img
                     print("[INFO] Scene change event emitted, entering stabilization phase")
+
             else:
                 if in_stabilization:
                     # Compare current frame to previous successful frame for stabilization
@@ -305,11 +320,57 @@ def run_detector(endpoint: str, reset_baseline: bool = False):
                     prev_frame_img = frame_img
 
             # Simple sleep to respect roughly 1 fps; user can adjust via env var if needed
-            time.sleep(1.0)
+            time.sleep(1.0)  # maintain approx 1 fps
     except KeyboardInterrupt:
         print("\nDetector stopped by user (Ctrl+C)")
 
 # ---------------------------------------------------------------------------
+# Backend delivery helper
+# ---------------------------------------------------------------------------
+
+def send_event(event: dict) -> bool:
+    """POST the given event to the configured backend endpoint.
+
+    Returns True on successful delivery (HTTP 200‑299 and a JSON response containing
+    ``success: true``). Retries with bounded exponential backoff on network or
+    server errors. The number of attempts and backoff behavior are configurable
+    via ``CAM_MAX_RETRIES`` and the existing backoff parameters.
+    """
+    max_retries = int(os.getenv("CAM_MAX_RETRIES", "3"))
+    backoff = 0.5  # initial backoff before first retry
+    max_backoff = 8.0
+    data = json.dumps(event).encode('utf-8')
+    headers = {"Content-Type": "application/json"}
+    for attempt in range(1, max_retries + 1):
+        try:
+            req = urllib.request.Request(CAM_API_ENDPOINT, data=data, headers=headers, method='POST')
+            with urllib.request.urlopen(req, timeout=CAM_TIMEOUT) as resp:
+                if 200 <= resp.status < 300:
+                    resp_body = resp.read().decode('utf-8')
+                    try:
+                        resp_json = json.loads(resp_body)
+                    except Exception as exc:
+                        print(f"[ERROR] Failed to parse backend JSON response: {exc}", file=sys.stderr)
+                        # treat as failed attempt, will retry
+                    else:
+                        if resp_json.get('success') is True:
+                            return True
+                        else:
+                            print(f"[ERROR] Backend response missing success:true – {resp_json}", file=sys.stderr)
+                else:
+                    print(f"[ERROR] Backend responded with HTTP {resp.status}", file=sys.stderr)
+        except urllib.error.HTTPError as exc:
+            print(f"[ERROR] HTTP error {exc.code} on backend delivery: {exc.reason}", file=sys.stderr)
+        except urllib.error.URLError as exc:
+            print(f"[ERROR] URL error on backend delivery: {exc.reason}", file=sys.stderr)
+        except socket.timeout:
+            print(f"[ERROR] Timeout after {CAM_TIMEOUT}s on backend delivery", file=sys.stderr)
+        except Exception as exc:
+            print(f"[ERROR] Unexpected error during backend delivery: {exc}", file=sys.stderr)
+        if attempt < max_retries:
+            time.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff)
+    return False
 # CLI entry point
 # ---------------------------------------------------------------------------
 def parse_args():

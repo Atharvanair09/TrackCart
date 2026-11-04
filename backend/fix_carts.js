@@ -14,9 +14,9 @@ async function main() {
 
     // 2. Determine missing carts
     const required = [
-      { cart_id: 'CART_01', device_id: 'cart-001', status: 'active' },
-      { cart_id: 'CART_02', device_id: 'cart-002', status: 'active' },
-      { cart_id: 'CART_03', device_id: 'cart-003', status: 'active' },
+      { cart_id: 'CART_01', device_id: 'cart-001', status: 'available' },
+      { cart_id: 'CART_02', device_id: 'cart-002', status: 'available' },
+      { cart_id: 'CART_03', device_id: 'cart-003', status: 'available' },
     ];
     const missing = required.filter(c => !existing.has(c.cart_id));
     if (missing.length === 0) {

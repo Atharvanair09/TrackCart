@@ -392,13 +392,13 @@ async function initDb() {
 
       // Ensure test carts exist
       await client.query(`
-        INSERT INTO carts (cart_id, device_id, status)
-        VALUES 
-          ('CART_01', 'cart-001', 'active'),
-          ('CART_02', 'cart-002', 'active'),
-          ('CART_03', 'cart-003', 'active')
-        ON CONFLICT (cart_id) DO NOTHING
-      `);
+          INSERT INTO carts (cart_id, device_id, status)
+          VALUES 
+            ('CART_01', 'cart-001', 'available'),
+            ('CART_02', 'cart-002', 'available'),
+            ('CART_03', 'cart-003', 'available')
+          ON CONFLICT (cart_id) DO NOTHING
+        `);
 
       // Ensure default customer user exists
       await client.query(`

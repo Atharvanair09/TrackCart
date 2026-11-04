@@ -48,15 +48,28 @@ router.post('/', async (req, res) => {
     }
 
     const sessionId = `SESS_${Date.now()}`;
-    const result = await client.query(
-      'INSERT INTO shopping_sessions (session_id, user_id, cart_id, status, last_activity_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING *',
-      [sessionId, userId || null, cartId, 'active']
-    );
-    // Mark cart as occupied
+    // Insert the new shopping session.
+    let result;
+    try {
+      result = await client.query(
+        'INSERT INTO shopping_sessions (session_id, user_id, cart_id, status, last_activity_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING *',
+        [sessionId, userId || null, cartId, 'active']
+      );
+    } catch (innerErr) {
+      // Roll back before responding.
+      await client.query('ROLLBACK');
+      // The partial unique index protecting one active session per cart is named 'uniq_active_session_per_cart'.
+      if (innerErr.code === '23505' && innerErr.constraint === 'uniq_active_session_per_cart') {
+        return res.status(409).json({ error: 'Cart already has an active session. Please scan again.' });
+      }
+      console.error('Error creating session:', innerErr);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+    // Mark cart as occupied after successful insert.
     await client.query('UPDATE carts SET status = $1 WHERE cart_id = $2', ['occupied', cartId]);
 
     await client.query('COMMIT');
-    res.status(201).json(result.rows[0]);
+    return res.status(201).json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating session:', error);
@@ -131,13 +144,13 @@ router.post('/:sessionId/create-order', async (req, res) => {
     const total = parseFloat((subtotal + taxAmount).toFixed(2));
     const amountInPaise = Math.round(total * 100);
     const paymentService = require('../services/paymentService');
-
-    if (!INVENTORY_ONLY_MODE && paymentService.isConfigured()) {
-      const order = await paymentService.createOrder({
-        amount: amountInPaise,
-        currency: 'INR',
-        receipt: `receipt_${sessionId}`
-      });
+    if (!INVENTORY_ONLY_MODE) {
+      // In production mode ensure Razorpay is configured
+      if (!paymentService.isConfigured()) {
+        await client.query('ROLLBACK');
+        return res.status(500).json({ error: 'Razorpay configuration missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.' });
+      }
+      const order = await paymentService.createOrder({ amount: amountInPaise, currency: 'INR', receipt: `receipt_${sessionId}` });
       await client.query('COMMIT');
       return res.status(200).json({
         order_id: order.id,
@@ -181,7 +194,9 @@ router.post('/:sessionId/checkout', async (req, res) => {
   try {
     await client.query('BEGIN');
     // Verify session exists and is active, lock the row for concurrency safety
-    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = $2 FOR UPDATE', [sessionId, 'active']);
+    const sessionRes = await client.query('SELECT * FROM shopping_sessions WHERE session_id = $1 AND status = ANY($2) FOR UPDATE', [sessionId, ['active', 'completed']]);
+    // Capture cart_id for later use in checkout
+    const cartId = sessionRes.rows.length > 0 ? sessionRes.rows[0].cart_id : null;
     if (sessionRes.rows.length === 0) {
         // Check if session exists but is expired
         const statusRes = await client.query('SELECT status FROM shopping_sessions WHERE session_id = $1', [sessionId]);
@@ -192,8 +207,13 @@ router.post('/:sessionId/checkout', async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Invalid or inactive session' });
     }
-    // Idempotency: if a sale already exists for this session, return it without modifying inventory
+    // Idempotency: if a sale already exists for this session, ensure cart state is reconciled before returning
     const existingSale = await client.query('SELECT * FROM sales WHERE session_id = $1', [sessionId]);
+    // If the session is completed but no sale exists, reject the checkout
+    if (sessionRes.rows[0].status === 'completed' && existingSale.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Completed session without sale' });
+    }
     if (existingSale.rows.length > 0) {
       const sale = existingSale.rows[0];
       const lineItems = await client.query(
@@ -208,6 +228,30 @@ router.post('/:sessionId/checkout', async (req, res) => {
         line_subtotal: Number(i.line_subtotal)
       }));
       sale.cart_id = sessionRes.rows[0]?.cart_id || null;
+      // Reconcile cart ownership safely
+      if (cartId) {
+        // Lock the cart row
+        const cartLockRes = await client.query('SELECT * FROM carts WHERE cart_id = $1 FOR UPDATE', [cartId]);
+        if (cartLockRes.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Cart not found' });
+        }
+        const cartRow = cartLockRes.rows[0];
+        // Check for other active sessions using this cart
+        const otherActiveRes = await client.query(
+          'SELECT session_id FROM shopping_sessions WHERE cart_id = $1 AND status = $2 AND session_id <> $3',
+          [cartId, 'active', sessionId]
+        );
+        // Release cart only if occupied, no other active session, and this session is completed
+        if (cartRow.status === 'occupied' && otherActiveRes.rows.length === 0 && sessionRes.rows[0].status === 'completed') {
+          const cartUpdateRes = await client.query('UPDATE carts SET status = $1 WHERE cart_id = $2', ['available', cartId]);
+          if (cartUpdateRes.rowCount !== 1) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Failed to release cart' });
+          }
+        }
+        // If cart already available or occupied by another active session, do nothing
+      }
       await client.query('COMMIT');
       return res.status(200).json(sale);
     }
@@ -363,6 +407,30 @@ const reservationAggRes = await client.query(
 
     // Mark session as completed
     await client.query('UPDATE shopping_sessions SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE session_id = $2', ['completed', sessionId]);
+
+    // Release the cart associated with this session
+    if (cartId) {
+      // Lock the cart row
+      const cartLockRes = await client.query('SELECT * FROM carts WHERE cart_id = $1 FOR UPDATE', [cartId]);
+      if (cartLockRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Cart not found' });
+      }
+      const cartRow = cartLockRes.rows[0];
+      // Ensure no other active session is using this cart
+      const otherActiveRes = await client.query(
+        'SELECT session_id FROM shopping_sessions WHERE cart_id = $1 AND status = $2',
+        [cartId, 'active']
+      );
+      if (cartRow.status === 'occupied' && otherActiveRes.rows.length === 0) {
+        const cartUpdateRes = await client.query('UPDATE carts SET status = $1 WHERE cart_id = $2', ['available', cartId]);
+        if (cartUpdateRes.rowCount !== 1) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Failed to release cart' });
+        }
+      }
+      // If cart already available or occupied by another active session, do nothing
+    }
 
     await client.query('COMMIT');
 
