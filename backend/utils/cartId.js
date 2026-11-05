@@ -13,9 +13,11 @@
 function normalizeCartId(rawId) {
   if (!rawId || typeof rawId !== 'string') return null;
   const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const match = cleaned.match(/CART0?([1-3])/);
-  if (!match) return null;
-  return `CART_0${match[1]}`;
+  const match = cleaned.match(/CART0*([1-3])/);
+  if (match) return `CART_0${match[1]}`;
+  const numMatch = cleaned.match(/^0*([1-3])$/);
+  if (numMatch) return `CART_0${numMatch[1]}`;
+  return null;
 }
 
 

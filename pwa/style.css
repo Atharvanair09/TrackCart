@@ -71,6 +71,44 @@ body {
   flex-shrink: 0;
 }
 
+.hud-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  color: #000000;
+  text-decoration: none;
+  font-family: var(--font-tech);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid #ffffff;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hud-admin-btn:hover,
+.hud-admin-btn:active {
+  background: #f59e0b;
+  color: #000000;
+  border-color: #f59e0b;
+}
+
+.hud-admin-btn .admin-icon {
+  color: #000000;
+  font-size: 0.75rem;
+}
+
 .hud-bar-left .hud-sep {
   color: #888888;
   margin: 0 4px;
@@ -85,7 +123,7 @@ body {
   flex-direction: column;
   padding: 16px;
   gap: 12px;
-  padding-bottom: 74px; /* space for bottom nav bar on mobile */
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
   animation: hudFade 0.2s ease-in-out;
   max-width: 1600px;
   margin-left: auto;
@@ -1129,16 +1167,7 @@ body {
    Active tab uses a white top border indicator.
    =========================== */
 .hud-bottom-nav {
-  position: fixed;
-  bottom: 0;
-  bottom: env(safe-area-inset-bottom, 0px);
-  left: 0;
-  right: 0;
-  height: 54px;
-  background: #000000;
-  border-top: 2px solid #333333;
-  display: flex;
-  z-index: 100;
+  display: none !important;
 }
 
 .nav-tab {

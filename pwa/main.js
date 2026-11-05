@@ -1,3 +1,4 @@
+import { initPush } from './src/push.js';
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // State
@@ -62,8 +63,8 @@ const rzpPayFailBtn = document.getElementById('rzp-pay-fail-btn');
 
 const billPrintBtn = document.getElementById('bill-print-btn');
 
-// Nav Tabs (both bottom and top bars)
-const navTabs = document.querySelectorAll('#bottom-tab-bar .nav-tab, #top-tab-bar .nav-tab');
+// Nav Tabs (desktop top bar)
+const navTabs = document.querySelectorAll('#top-tab-bar .nav-tab');
 
 // Initialize PWA App
 function init() {
@@ -92,12 +93,21 @@ function showScreen(screenName) {
   }
 
   // Update tab highlights
+  const hasActiveSession = !!currentSessionId;
   navTabs.forEach(tab => {
     const target = tab.dataset.target;
     if (target === screenName || (screenName === 'home' && (target === 'home' || target === 'tare' || target === 'cart'))) {
       tab.classList.add('active');
     } else {
       tab.classList.remove('active');
+    }
+
+    if (target === 'cart' || target === 'home') {
+      if (hasActiveSession) {
+        tab.innerHTML = '<span class="tab-icon">🛒</span> CART';
+      } else {
+        tab.innerHTML = '<span class="tab-icon">🏠</span> HOME';
+      }
     }
   });
 
@@ -131,15 +141,15 @@ function formatPrice(amount) {
 function normalizeCartIdFrontend(rawId) {
   if (!rawId || typeof rawId !== 'string') return null;
   const cleaned = rawId.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const match = cleaned.match(/CART0?([1-3])/);
-  if (!match) return null;
-  return `CART_0${match[1]}`;
+  const match = cleaned.match(/CART0*([1-3])/);
+  if (match) return `CART_0${match[1]}`;
+  const numMatch = cleaned.match(/^0*([1-3])$/);
+  if (numMatch) return `CART_0${numMatch[1]}`;
+  return null;
 }
 
 // Create Session API Call (POST /api/sessions)
 async function createSession(cartId) {
-
-
   const normalizedId = normalizeCartIdFrontend(cartId);
   if (!normalizedId) {
     showError(scannerError, 'INVALID CART ID – must be CART‑01 / CART‑02 / CART‑03');
@@ -163,6 +173,21 @@ async function createSession(cartId) {
 
     if (!res.ok) {
       if (res.status === 409) {
+        // If cart is already in use, check if current user already has the active session for it
+        if (currentSessionId) {
+          try {
+            const checkRes = await fetch(`${API_BASE}/sessions/${currentSessionId}`);
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData.cart_id === normalizedId && checkData.status === 'active') {
+                showScreen('cart');
+                fetchCart(true);
+                startPolling();
+                return;
+              }
+            }
+          } catch (e) {}
+        }
         throw new Error(`HTTP 409: Cart '${normalizedId}' is already in use by an active session.`);
       } else if (res.status === 404) {
         throw new Error(`HTTP 404: Cart '${normalizedId}' not found in database.`);
@@ -174,10 +199,19 @@ async function createSession(cartId) {
     currentSessionId = data.session_id;
     localStorage.setItem('smart_cart_session_id', currentSessionId);
 
-    initPush();
-  showScreen('cart');
+    // Automatically transition to the cart page immediately
+    showScreen('cart');
     fetchCart(true);
     startPolling();
+
+    // Initialize push notifications safely in the background
+    if (typeof initPush === 'function') {
+      try {
+        initPush();
+      } catch (pushErr) {
+        console.warn('Push notification setup deferred or unsupported:', pushErr);
+      }
+    }
 
   } catch (err) {
     console.error('Error starting session:', err);
@@ -697,6 +731,10 @@ async function startCamera() {
         const normalizedId = normalizeCartIdFrontend(rawScanned);
         if (normalizedId) {
           console.log('QR Code Scanned and normalized:', normalizedId);
+          if (scannerStatusTag) {
+            scannerStatusTag.textContent = '■ PAIRING...';
+            scannerStatusTag.className = 'hud-badge status-standby';
+          }
           stopCamera();
           createSession(normalizedId);
         } else {
