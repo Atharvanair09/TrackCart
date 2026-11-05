@@ -531,6 +531,18 @@ async function initDb() {
     }
 
     console.log('Database initialized.');
+
+    // Clean up orphaned 'active' sessions whose cart is now 'available'
+    // This fixes data inconsistency from server crashes or unclean shutdowns
+    const staleRes = await client.query(`
+      UPDATE shopping_sessions
+      SET status = 'expired', ended_at = CURRENT_TIMESTAMP
+      WHERE status = 'active'
+        AND cart_id IN (SELECT cart_id FROM carts WHERE status = 'available')
+    `);
+    if (staleRes.rowCount > 0) {
+      console.log(`[db] Startup cleanup: ${staleRes.rowCount} stale active session(s) marked as expired (cart was already 'available').`);
+    }
   } catch (err) {
     console.error('Error initializing DB:', err);
   } finally {

@@ -320,58 +320,260 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* Primary Tab Navigation */
-.admin-tab-nav {
+/* ============================================================
+   Side Navigation Drawer & Hamburger Toggle
+   ============================================================ */
+
+/* 1. Hamburger Toggle Button in Header */
+.sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: #f1f5f9;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #ffffff;
+}
+
+.sidebar-toggle-btn .hamburger-box {
+  width: 18px;
+  height: 14px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sidebar-toggle-btn .hamburger-inner,
+.sidebar-toggle-btn .hamburger-box::before,
+.sidebar-toggle-btn .hamburger-box::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: #f1f5f9;
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+}
+
+.sidebar-toggle-btn:hover .hamburger-inner,
+.sidebar-toggle-btn:hover .hamburger-box::before,
+.sidebar-toggle-btn:hover .hamburger-box::after {
+  background: #ffffff;
+}
+
+.sidebar-toggle-text {
+  font-family: var(--font-tech, 'Space Mono', monospace);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* 2. Backdrop Overlay */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 3. Side Navigation Drawer */
+.admin-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 85vw;
+  background: #09090b;
+  border-right: 1px solid #27272a;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 6px 0 28px rgba(0, 0, 0, 0.5);
+}
+
+.admin-sidebar.open {
+  transform: translateX(0);
+}
+
+/* 4. Sidebar Header */
+.sidebar-header {
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  height: 48px;
-  background: var(--bg-surface);
-  overflow-x: auto;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #27272a;
+  background: #121214;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-close-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: #18181b;
+  border: 1px solid #27272a;
+  color: #cbd5e1;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-close-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+/* 5. Nav Items Container inside Drawer */
+.sidebar-nav-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-nav-heading {
+  font-family: var(--font-tech, 'Space Mono', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #64748b;
+  padding: 6px 12px 2px;
+  text-transform: uppercase;
+}
+
+.admin-sidebar .admin-tab-nav {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  padding: 0;
+  background: transparent;
+  width: 100%;
+}
+
+.admin-sidebar .nav-tab {
+  width: 100%;
+  height: auto;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.admin-sidebar .nav-tab:hover {
+  background: #18181b;
+  color: #ffffff;
+  border-color: #27272a;
+}
+
+.admin-sidebar .nav-tab.active {
+  background: #1e1b4b;
+  color: #a5b4fc;
+  border: 1px solid #4338ca;
+  font-weight: 600;
+}
+
+.admin-sidebar .nav-tab.active .tab-icon {
+  transform: scale(1.1);
+}
+
+.admin-sidebar .nav-tab .tab-icon {
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+/* 6. Sidebar Footer */
+.sidebar-footer {
+  padding: 12px 14px;
+  border-top: 1px solid #27272a;
+  background: #121214;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-footer-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: #18181b;
+  border: 1px solid #27272a;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
   width: 100%;
   box-sizing: border-box;
 }
 
-.admin-tab-nav::-webkit-scrollbar {
-  height: 3px;
-}
-.admin-tab-nav::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 3px;
+.sidebar-footer-link:hover {
+  background: #27272a;
+  color: #ffffff;
+  border-color: #3f3f46;
 }
 
-.nav-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 8px 18px;
-  border: 2px solid var(--color-primary);
-  background: var(--bg-surface);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-white);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.nav-tab:hover {
-  color: var(--text-primary);
-  background: var(--bg-surface-secondary);
-}
-
-.nav-tab.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  background: transparent;
-}
-
-.nav-tab .tab-icon {
-  font-size: 1rem;
+.sidebar-footer-link.logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: #ef4444;
 }
 
 /* ============================================================

@@ -188,9 +188,14 @@ router.get('/dashboard', async (req, res) => {
     `);
     const salesStats = salesStatsRes.rows[0];
 
-    const activeCartsRes = await client.query(
-      `SELECT COUNT(*) AS active_carts FROM shopping_sessions WHERE status = 'active'`
-    );
+    // Count only sessions where the cart is also 'occupied' — prevents counting
+    // orphaned 'active' sessions whose cart was reset to 'available' (e.g. server crash)
+    const activeCartsRes = await client.query(`
+      SELECT COUNT(*) AS active_carts
+      FROM shopping_sessions ss
+      JOIN carts c ON ss.cart_id = c.cart_id
+      WHERE ss.status = 'active' AND c.status = 'occupied'
+    `);
     const activeCartsCount = parseInt(activeCartsRes.rows[0]?.active_carts, 10) || 0;
 
     const profitRes = await client.query(`
@@ -211,10 +216,9 @@ router.get('/dashboard', async (req, res) => {
       totalReserved += p.reserved;
       totalAssetVal += (p.onHand * p.price);
       if (p.available <= 0) {
-        lowStockCount++;
-        outOfStockCount++;
+        outOfStockCount++;        // out of stock only
       } else if (p.available <= p.reorderLevel) {
-        lowStockCount++;
+        lowStockCount++;          // low stock only (not out of stock)
       }
     });
 
@@ -1221,9 +1225,12 @@ router.get('/analytics', async (req, res) => {
       LIMIT 8
     `, params);
 
-    const activeSessionRes = await client.query(
-      `SELECT COUNT(*) AS active_sessions FROM shopping_sessions WHERE status = 'active'`
-    );
+    const activeSessionRes = await client.query(`
+      SELECT COUNT(*) AS active_sessions
+      FROM shopping_sessions ss
+      JOIN carts c ON ss.cart_id = c.cart_id
+      WHERE ss.status = 'active' AND c.status = 'occupied'
+    `);
 
     const movActionRes = await client.query(`
       SELECT action, COUNT(*) AS count, COALESCE(SUM(ABS(delta)), 0) AS total_units
@@ -1280,6 +1287,45 @@ router.get('/analytics', async (req, res) => {
   } catch (err) {
     console.error('Error fetching analytics:', err);
     return res.status(500).json({ error: 'Failed to retrieve analytics data' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/admin/cleanup-stale-sessions
+ * Marks sessions as 'expired' where the session is 'active' but the cart is 'available'
+ * (data inconsistency from server crashes or improper session termination).
+ * Does NOT delete any records — only updates status.
+ */
+router.post('/cleanup-stale-sessions', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(`
+      UPDATE shopping_sessions
+      SET status = 'expired', ended_at = CURRENT_TIMESTAMP
+      WHERE status = 'active'
+        AND cart_id IN (
+          SELECT cart_id FROM carts WHERE status = 'available'
+        )
+      RETURNING session_id, cart_id, started_at
+    `);
+    await client.query('COMMIT');
+    const cleaned = result.rows;
+    console.log(`[admin] Stale session cleanup: ${cleaned.length} session(s) marked expired.`);
+    return res.json({
+      success: true,
+      cleanedCount: cleaned.length,
+      sessions: cleaned,
+      message: cleaned.length > 0
+        ? `${cleaned.length} stale session(s) marked as expired. No data was deleted.`
+        : 'No stale sessions found. All active sessions have occupied carts.'
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error cleaning stale sessions:', err);
+    return res.status(500).json({ error: 'Failed to clean stale sessions' });
   } finally {
     client.release();
   }

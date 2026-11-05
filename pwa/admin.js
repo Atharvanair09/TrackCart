@@ -49,9 +49,13 @@ async function enforceAuth() {
 }
 
 function setupLogout() {
-  const logoutBtn = document.getElementById('btn-admin-logout');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
+  const logoutButtons = [
+    document.getElementById('btn-admin-logout'),
+    document.getElementById('btn-sidebar-logout')
+  ].filter(Boolean);
+
+  logoutButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
       const token = getAuthToken();
       try {
         if (token) {
@@ -66,13 +70,14 @@ function setupLogout() {
       showToast('Signed out. Redirecting...', 'info');
       setTimeout(() => window.location.replace('/admin-login.html'), 400);
     });
-  }
+  });
 }
 
 // ==========================================
 // 1. Global Application State
 // ==========================================
-let isDemoMode = false;
+// Restore demo mode from localStorage so mode survives page refreshes
+let isDemoMode = localStorage.getItem('trackcart_demo_mode') === 'true';
 let currentTab = 'dashboard';
 let currentReportTab = 'sales';
 
@@ -227,7 +232,50 @@ async function loadDashboardData() {
   }
 }
 
+// Demo sessions — deterministic mock data for demonstration mode
+const DEMO_SESSIONS_DATA = [
+  {
+    session_id: 'DEMO_SESS_003', cart_id: 'CART_01', user_id: 'GUEST_003',
+    status: 'active', started_at: new Date(Date.now() - 8 * 60000).toISOString().replace('T', ' ').slice(0, 19),
+    ended_at: null, item_count: 2, subtotal: 43.98, sale_id: null,
+    items: [
+      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price_at_addition: 39.99, subtotal: 39.99 },
+      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 1, unit_price_at_addition: 3.99, subtotal: 3.99 }
+    ]
+  },
+  {
+    session_id: 'DEMO_SESS_002', cart_id: 'CART_02', user_id: 'GUEST_002',
+    status: 'completed', started_at: '2026-11-05 10:15:00', ended_at: '2026-11-05 10:52:00',
+    item_count: 4, subtotal: 23.75, sale_id: 'DEMO_SALE_002',
+    items: [
+      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 2, unit_price_at_addition: 2.99, subtotal: 5.98 },
+      { product_id: 'PROD-006', name: 'Organic Trail Mix 200g', category: 'Snacks', quantity: 2, unit_price_at_addition: 4.79, subtotal: 9.58 },
+      { product_id: 'PROD-010', name: 'Protein Whey Crisp Bar', category: 'Snacks', quantity: 2, unit_price_at_addition: 3.29, subtotal: 6.58 }
+    ]
+  },
+  {
+    session_id: 'DEMO_SESS_001', cart_id: 'CART_03', user_id: 'GUEST_001',
+    status: 'completed', started_at: '2026-11-05 09:00:00', ended_at: '2026-11-05 09:38:00',
+    item_count: 5, subtotal: 71.95, sale_id: 'DEMO_SALE_001',
+    items: [
+      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price_at_addition: 39.99, subtotal: 39.99 },
+      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 1, unit_price_at_addition: 24.99, subtotal: 24.99 },
+      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 2, unit_price_at_addition: 3.99, subtotal: 7.98 }
+    ]
+  },
+  {
+    session_id: 'DEMO_SESS_000', cart_id: 'CART_01', user_id: null,
+    status: 'cancelled', started_at: '2026-11-04 17:30:00', ended_at: '2026-11-04 17:35:00',
+    item_count: 0, subtotal: 0, sale_id: null, items: []
+  }
+];
+
 async function loadSessionsData() {
+  if (isDemoMode) {
+    sessionsData = DEMO_SESSIONS_DATA;
+    renderSessionsTable();
+    return;
+  }
   try {
     const res = await fetchWithAuth(`${API_BASE}/admin/sessions?limit=50`);
     const data = await res.json();
@@ -237,10 +285,58 @@ async function loadSessionsData() {
     }
   } catch (err) {
     console.error('Error loading sessions:', err);
+    showToast('Failed to load sessions data', 'error');
   }
 }
 
+// Demo sales — deterministic mock data for demonstration mode
+const DEMO_SALES_DATA = [
+  {
+    sale_id: 'DEMO_SALE_001', session_id: 'DEMO_SESS_001',
+    subtotal: 71.95, tax_rate: 0.0825, tax_amount: 5.94, total: 77.89,
+    item_count: 4, completed_at: '2026-11-05 09:38:00',
+    lineItems: [
+      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price: 39.99, line_subtotal: 39.99 },
+      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 1, unit_price: 24.99, line_subtotal: 24.99 },
+      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 2, unit_price: 3.99, line_subtotal: 7.98 }
+    ]
+  },
+  {
+    sale_id: 'DEMO_SALE_002', session_id: 'DEMO_SESS_002',
+    subtotal: 22.14, tax_rate: 0.0825, tax_amount: 1.83, total: 23.97,
+    item_count: 6, completed_at: '2026-11-05 10:52:00',
+    lineItems: [
+      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 2, unit_price: 2.99, line_subtotal: 5.98 },
+      { product_id: 'PROD-006', name: 'Organic Trail Mix 200g', category: 'Snacks', quantity: 2, unit_price: 4.79, line_subtotal: 9.58 },
+      { product_id: 'PROD-010', name: 'Protein Whey Crisp Bar', category: 'Snacks', quantity: 2, unit_price: 3.29, line_subtotal: 6.58 }
+    ]
+  },
+  {
+    sale_id: 'DEMO_SALE_003', session_id: null,
+    subtotal: 4892.90, tax_rate: 0.0825, tax_amount: 403.67, total: 5296.57,
+    item_count: 412, completed_at: '2026-11-04 16:00:00',
+    lineItems: [
+      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 48, unit_price: 39.99, line_subtotal: 1919.52 },
+      { product_id: 'PROD001', name: 'Smart Water Bottle', category: 'Accessories', quantity: 34, unit_price: 19.99, line_subtotal: 679.66 },
+      { product_id: 'PROD002', name: 'Organic Granola Bar', category: 'Snacks', quantity: 62, unit_price: 2.49, line_subtotal: 154.38 },
+      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 55, unit_price: 3.99, line_subtotal: 219.45 },
+      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 72, unit_price: 2.99, line_subtotal: 215.28 },
+      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 22, unit_price: 24.99, line_subtotal: 549.78 }
+    ]
+  }
+];
+
 async function loadSalesData() {
+  if (isDemoMode) {
+    salesData = DEMO_SALES_DATA;
+    const demoTotals = {
+      count: DEMO_SALES_DATA.length,
+      revenue: DEMO_SALES_DATA.reduce((s, d) => s + d.total, 0),
+      tax: DEMO_SALES_DATA.reduce((s, d) => s + d.tax_amount, 0)
+    };
+    renderSalesSection(demoTotals);
+    return;
+  }
   try {
     const start = document.getElementById('sales-start-date')?.value;
     const end = document.getElementById('sales-end-date')?.value;
@@ -255,6 +351,7 @@ async function loadSalesData() {
     }
   } catch (err) {
     console.error('Error loading sales:', err);
+    showToast('Failed to load sales data', 'error');
   }
 }
 
@@ -868,15 +965,20 @@ function renderSessionsTable() {
     return;
   }
 
-  tbody.innerHTML = filtered.map(s => `
+  tbody.innerHTML = filtered.map(s => {
+    let statusClass = 'status-healthy';
+    let statusLabel = 'Completed';
+    if (s.status === 'active') { statusClass = 'status-active'; statusLabel = 'Active In-Store'; }
+    else if (s.status === 'cancelled') { statusClass = 'status-low-stock'; statusLabel = 'Cancelled'; }
+    else if (s.status === 'expired') { statusClass = 'status-out-stock'; statusLabel = 'Expired'; }
+
+    return `
     <tr>
       <td style="font-family:var(--font-mono); font-weight:600;">${s.session_id}</td>
       <td style="font-family:var(--font-mono); font-size:0.85rem;">${s.cart_id}</td>
       <td>${s.user_id || 'Guest Shopper'}</td>
       <td>
-        <span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-healthy'}">
-          ${s.status === 'active' ? 'Active In-Store' : 'Completed'}
-        </span>
+        <span class="status-pill ${statusClass}">${statusLabel}</span>
       </td>
       <td style="font-size:0.8rem; color:var(--text-muted);">${s.started_at}</td>
       <td style="text-align:right; font-weight:600;">${s.item_count}</td>
@@ -887,7 +989,7 @@ function renderSessionsTable() {
         </button>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
 
   tbody.querySelectorAll('.btn-view-session-items').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1339,12 +1441,15 @@ function renderAllCharts() {
     }]
   }, { showLegend: true, scales: { x: { display: false }, y: { display: false } } });
 
-  // Chart 14: Quantity at Risk
+  // Chart 14: Quantity at Risk (from real expiry data, or empty state if no data)
+  const expiryRiskItems = expiryData.filter(e => e.quantityAtRisk > 0).slice(0, 6);
   createChart('chart-qty-at-risk', 'bar', {
-    labels: ['Cold Brew Coffee', 'Granola Bar', 'Protein Bar', 'Trail Mix'],
+    labels: expiryRiskItems.length > 0
+      ? expiryRiskItems.map(e => e.name || e.productId)
+      : ['No expiry risk data'],
     datasets: [{
       label: 'Units at Risk',
-      data: [14, 22, 18, 5],
+      data: expiryRiskItems.length > 0 ? expiryRiskItems.map(e => e.quantityAtRisk) : [0],
       backgroundColor: amberColor,
       borderRadius: 4
     }]
@@ -1908,11 +2013,47 @@ function switchTab(tabId) {
   }
 }
 
+function setupSidebar() {
+  const sidebar = document.getElementById('admin-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const btnToggle = document.getElementById('btn-sidebar-toggle');
+  const btnClose = document.getElementById('btn-sidebar-close');
+
+  function openSidebar() {
+    sidebar?.classList.add('open');
+    backdrop?.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSidebar() {
+    sidebar?.classList.remove('open');
+    backdrop?.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  btnToggle?.addEventListener('click', openSidebar);
+  btnClose?.addEventListener('click', closeSidebar);
+  backdrop?.addEventListener('click', closeSidebar);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar?.classList.contains('open')) {
+      closeSidebar();
+    }
+  });
+
+  return { openSidebar, closeSidebar };
+}
+
 function setupNavigation() {
+  const { closeSidebar } = setupSidebar();
+
   document.querySelectorAll('#admin-main-nav .nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabId = tab.getAttribute('data-tab');
-      if (tabId) switchTab(tabId);
+      if (tabId) {
+        switchTab(tabId);
+        closeSidebar();
+      }
     });
   });
 
@@ -1933,6 +2074,21 @@ function setupNavigation() {
   document.getElementById('btn-inventory-restock')?.addEventListener('click', () => openRestockModal());
   document.getElementById('btn-create-custom-promo')?.addEventListener('click', () => openPromotionModal());
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', loadSessionsData);
+  document.getElementById('btn-cleanup-sessions')?.addEventListener('click', async () => {
+    if (isDemoMode) { showToast('Stale session cleanup is not available in Demo mode', 'warning'); return; }
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/admin/cleanup-stale-sessions`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, data.cleanedCount > 0 ? 'success' : 'info');
+        await Promise.all([loadSessionsData(), loadDashboardData()]);
+      } else {
+        showToast(data.error || 'Cleanup failed', 'error');
+      }
+    } catch (err) {
+      showToast('Server error during cleanup', 'error');
+    }
+  });
   document.getElementById('btn-refresh-data')?.addEventListener('click', refreshAllData);
 
   // Demo Mode Switch
@@ -1942,6 +2098,7 @@ function setupNavigation() {
 
   btnLive?.addEventListener('click', () => {
     isDemoMode = false;
+    localStorage.setItem('trackcart_demo_mode', 'false');
     btnLive.classList.add('active');
     btnDemo.classList.remove('active');
     if (demoBanner) demoBanner.classList.add('hidden');
@@ -1951,12 +2108,24 @@ function setupNavigation() {
 
   btnDemo?.addEventListener('click', () => {
     isDemoMode = true;
+    localStorage.setItem('trackcart_demo_mode', 'true');
     btnDemo.classList.add('active', 'demo');
     btnLive.classList.remove('active');
     if (demoBanner) demoBanner.classList.remove('hidden');
     showToast('Switched to Demo Analytics Simulation Mode', 'info');
     refreshAllData();
   });
+
+  // Apply persisted mode visual indicator immediately on page load
+  if (isDemoMode) {
+    btnDemo?.classList.add('active', 'demo');
+    btnLive?.classList.remove('active');
+    if (demoBanner) demoBanner.classList.remove('hidden');
+  } else {
+    btnLive?.classList.add('active');
+    btnDemo?.classList.remove('active');
+    if (demoBanner) demoBanner.classList.add('hidden');
+  }
 
   // Inventory Filters
   document.getElementById('inv-search-input')?.addEventListener('input', (e) => {

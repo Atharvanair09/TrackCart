@@ -15,10 +15,75 @@
   <body class="admin-body">
     <div id="admin-app">
       
+      <!-- Backdrop for Side Navigation Drawer -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+      <!-- Side Navigation Drawer -->
+      <aside id="admin-sidebar" class="admin-sidebar" aria-label="Main Navigation">
+        <div class="sidebar-header">
+          <div class="sidebar-brand">
+            <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="" style="width: 32px; height: 32px;"></div>
+            <div class="brand-titles">
+              <span class="brand-name">TrackMart</span>
+              <span class="brand-subtitle">Console Menu</span>
+            </div>
+          </div>
+          <button id="btn-sidebar-close" class="sidebar-close-btn" aria-label="Close menu" title="Close menu">✕</button>
+        </div>
+
+        <div class="sidebar-nav-container">
+          <span class="sidebar-nav-heading">NAVIGATION</span>
+          <nav class="admin-tab-nav" id="admin-main-nav">
+            <button class="nav-tab active" data-tab="dashboard">
+              <span class="tab-icon">🏠</span> Dashboard
+            </button>
+            <button class="nav-tab" data-tab="inventory">
+              <span class="tab-icon">📦</span> Products & Inventory
+            </button>
+            <button class="nav-tab" data-tab="sessions">
+              <span class="tab-icon">🛒</span> Shopping Carts
+            </button>
+            <button class="nav-tab" data-tab="sales">
+              <span class="tab-icon">💰</span> Sales & Orders
+            </button>
+            <button class="nav-tab" data-tab="expiry">
+              <span class="tab-icon">⏳</span> Expiry & Offers
+            </button>
+            <button class="nav-tab" data-tab="forecasting">
+              <span class="tab-icon">📈</span> Demand Forecasting
+            </button>
+            <button class="nav-tab" data-tab="basket">
+              <span class="tab-icon">🛍️</span> Market Basket Analysis
+            </button>
+            <button class="nav-tab" data-tab="reports">
+              <span class="tab-icon">📊</span> Reports & Analytics
+            </button>
+            <button class="nav-tab" data-tab="movements">
+              <span class="tab-icon">📜</span> Inventory History
+            </button>
+          </nav>
+        </div>
+
+        <div class="sidebar-footer">
+          <a href="/index.html" class="sidebar-footer-link" title="Switch to Customer Cart Interface">
+            <span>🛒</span> Customer Cart
+          </a>
+          <button id="btn-sidebar-logout" class="sidebar-footer-link logout" title="Sign out">
+            <span>🔒</span> Logout
+          </button>
+        </div>
+      </aside>
+
       <!-- 1. Top Modern Navigation Header -->
       <header class="admin-header">
         <div class="admin-top-bar">
           <div class="brand-group">
+            <button id="btn-sidebar-toggle" class="sidebar-toggle-btn" aria-label="Toggle navigation menu" title="Open Menu">
+              <span class="hamburger-box">
+                <span class="hamburger-inner"></span>
+              </span>
+              <span class="sidebar-toggle-text">Menu</span>
+            </button>
             <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="" style="width: 50px; height: 50px;"></div>
             <div class="brand-titles">
               <span class="brand-name">TrackMart</span>
@@ -61,37 +126,6 @@
             </button>
           </div>
         </div>
-
-        <!-- 2. Primary 9 Section Tabs -->
-        <nav class="admin-tab-nav" id="admin-main-nav">
-          <button class="nav-tab active" data-tab="dashboard">
-            <span class="tab-icon">🏠</span> Dashboard
-          </button>
-          <button class="nav-tab" data-tab="inventory">
-            <span class="tab-icon">📦</span> Products & Inventory
-          </button>
-          <button class="nav-tab" data-tab="sessions">
-            <span class="tab-icon">🛒</span> Shopping Carts
-          </button>
-          <button class="nav-tab" data-tab="sales">
-            <span class="tab-icon">💰</span> Sales & Orders
-          </button>
-          <button class="nav-tab" data-tab="expiry">
-            <span class="tab-icon">⏳</span> Expiry & Offers
-          </button>
-          <button class="nav-tab" data-tab="forecasting">
-            <span class="tab-icon">📈</span> Demand Forecasting
-          </button>
-          <button class="nav-tab" data-tab="basket">
-            <span class="tab-icon">🛍️</span> Market Basket Analysis
-          </button>
-          <button class="nav-tab" data-tab="reports">
-            <span class="tab-icon">📊</span> Reports & Analytics
-          </button>
-          <button class="nav-tab" data-tab="movements">
-            <span class="tab-icon">📜</span> Inventory History
-          </button>
-        </nav>
        </header>  
 
       <!-- 3. Store Action Sub-Header Strip -->
@@ -417,6 +451,7 @@
               <p>Monitor live shopper RFID scans, cart items, inventory reservations, and checkout status.</p>
             </div>
             <button class="btn-secondary" id="btn-refresh-sessions">🔄 Refresh Sessions</button>
+            <button class="btn-secondary" id="btn-cleanup-sessions" title="Mark stale sessions as expired (active session + available cart)">🧹 Fix Stale Sessions</button>
           </div>
 
           <div class="table-card">
