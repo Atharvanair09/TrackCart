@@ -102,6 +102,30 @@ router.get('/:sessionId', async (req, res) => {
     session.items = itemsResult.rows;
     session.cartTotal = session.items.reduce((sum, item) => sum + item.subtotal, 0);
     
+    const CAM_CORRELATION_WINDOW = parseInt(process.env.CAM_CORRELATION_WINDOW || '5', 10);
+    // Transition pending camera events whose correlation window has expired to mismatch = TRUE, status = 'mismatch'
+    // camera_events_log.timestamp is TIMESTAMPTZ, comparing directly with NOW() (TIMESTAMPTZ) avoids timezone conversions
+    await pool.query(`
+      UPDATE camera_events_log
+      SET status = 'mismatch', mismatch = TRUE
+      WHERE session_id = $1
+        AND status = 'pending'
+        AND timestamp < (NOW() - make_interval(secs => $2::int))
+    `, [session.session_id, CAM_CORRELATION_WINDOW]);
+
+    // Retrieve confirmed unverified camera events (confirmed mismatches only)
+    const unverifiedEventsResult = await pool.query(`
+      SELECT event_id, timestamp, type, device_id, baseline_id, diff_score, consecutive_frames, classification, mismatch, status
+      FROM camera_events_log
+      WHERE session_id = $1
+        AND status = 'mismatch'
+        AND mismatch = TRUE
+      ORDER BY timestamp DESC
+    `, [session.session_id]);
+
+    session.unverifiedEvents = unverifiedEventsResult.rows;
+    session.hasUnverifiedEvents = unverifiedEventsResult.rows.length > 0;
+
     res.status(200).json(session);
   } catch (error) {
     console.error('Error retrieving session:', error);

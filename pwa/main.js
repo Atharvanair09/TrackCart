@@ -255,7 +255,6 @@ async function fetchCart(isInitial = false) {
     }
 
     renderCart(data);
-    hideError(cartError);
     if (cartOnlineBadge) {
       cartOnlineBadge.textContent = '■ ONLINE';
       cartOnlineBadge.className = 'hud-badge status-online';
@@ -292,23 +291,17 @@ function renderCart(sessionData) {
   const items = sessionData.items || [];
 
   // ----- MISMATCH NOTIFICATION LOGIC -----
-  // Preserve previous cart total in a closure variable (global in this file)
-  if (typeof window._prevCartTotal === 'undefined') {
-    window._prevCartTotal = null;
-  }
-  const currentCartTotal = sessionData.cartTotal || 0;
-  const cameraSync = sessionData.cameraSync; // true if recent camera event matched
-  // If cart total changed but no camera sync, warn user
-  if (window._prevCartTotal !== null && currentCartTotal !== window._prevCartTotal && !cameraSync) {
-    showError(cartError, 'CAMERA MISMATCH: Cart changed without camera confirmation');
-  } else if (cameraSync && (window._prevCartTotal === null || currentCartTotal === window._prevCartTotal)) {
-    // Camera reported a change but cart unchanged – also warn
-    showError(cartError, 'CAMERA MISMATCH: Camera detected change but cart unchanged');
+  // Display "WARNING: Unverified Cart Change" only when the session contains confirmed mismatch events.
+  const confirmedMismatches = (sessionData.unverifiedEvents || []).filter(
+    (ev) => ev.status === 'mismatch' && ev.mismatch === true
+  );
+  const hasConfirmedMismatch = confirmedMismatches.length > 0;
+
+  if (hasConfirmedMismatch) {
+    showError(cartError, 'WARNING: Unverified Cart Change');
   } else {
     hideError(cartError);
   }
-  // Update previous total for next comparison
-  window._prevCartTotal = currentCartTotal;
 
   if (items.length === 0) {
     emptyState.classList.remove('hidden');

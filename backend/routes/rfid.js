@@ -28,6 +28,9 @@ router.post('/events', async (req, res) => {
     await client.query('BEGIN');
 
     // Deduplication check (e.g., within 5 seconds)
+    // Acquire transaction-scoped advisory lock per device to serialize reconciliation with camera route
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [trimmedDeviceId]);
+
     const recentEvent = await client.query(`
       SELECT * FROM rfid_events_log 
       WHERE device_id = $1 AND tag_uid = $2 AND scanned_at >= NOW() - INTERVAL '5 seconds'
@@ -38,10 +41,12 @@ router.post('/events', async (req, res) => {
       return res.status(429).json({ error: 'Duplicate RFID event detected' });
     }
 
-    // Log the event
-    await client.query(`
+    // Log the event and capture scanned_at timestamp
+    const rfidInsert = await client.query(`
       INSERT INTO rfid_events_log (device_id, tag_uid) VALUES ($1, $2)
+      RETURNING scanned_at
     `, [trimmedDeviceId, normalizedUid]);
+    const scannedAtUtc = rfidInsert.rows[0]?.scanned_at;
 
     // Resolve firmware deviceId to a cart. Firmware DEVICE_ID (e.g. cart-001)
     // is carts.device_id; the PWA session is keyed by carts.cart_id (e.g. CART_01).
@@ -73,7 +78,7 @@ router.post('/events', async (req, res) => {
       WHERE session_id = $1
         AND status = 'active'
         AND expired_at IS NULL
-        AND last_activity_at > NOW() - INTERVAL '15 minutes'
+        AND last_activity_at > CURRENT_TIMESTAMP - INTERVAL '15 minutes'
       FOR UPDATE
     `, [sessionId]);
     if (sessionCheck.rowCount === 0) {
@@ -169,24 +174,63 @@ router.post('/events', async (req, res) => {
     `, [sessionId]);
 
     await client.query('UPDATE shopping_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionId]);
-await client.query('DELETE FROM session_notifications WHERE session_id = $1', [sessionId]);
-await client.query('COMMIT');
+    await client.query('DELETE FROM session_notifications WHERE session_id = $1', [sessionId]);
 
-    // Correlate with recent camera events for this device
+    // Correlate with recent camera events for this device within the same transaction under the advisory lock
+    // Create a savepoint so that camera reconciliation failures do not roll back earlier work
+    await client.query('SAVEPOINT camera_sync');
     let cameraSync = false;
     try {
-      const camRes = await client.query(
-        `SELECT * FROM camera_events_log 
-         WHERE device_id = $1 
-           AND timestamp >= NOW() - INTERVAL '${CAM_CORRELATION_WINDOW} seconds'`,
-        [trimmedDeviceId]
+      // Find pending or mismatched camera events for the same device within CAM_CORRELATION_WINDOW
+      // Reconcile matching events to status = 'matched' and mismatch = FALSE
+      // camera_events_log.timestamp is TIMESTAMPTZ, rfidTs is TIMESTAMPTZ (scanned_at AT TIME ZONE 'UTC')
+      const rfidTs = scannedAtUtc
+        ? (scannedAtUtc instanceof Date ? scannedAtUtc.toISOString() : new Date(scannedAtUtc).toISOString())
+        : new Date().toISOString();
+
+      const matchResult = await client.query(
+        `UPDATE camera_events_log
+         SET status = 'matched', mismatch = FALSE, session_id = COALESCE(session_id, $4)
+         WHERE event_id IN (
+           SELECT event_id
+           FROM camera_events_log
+           WHERE device_id = $1
+             AND (
+               (status = 'pending' AND mismatch = FALSE) OR
+               (status = 'mismatch' AND mismatch = TRUE)
+             )
+             AND timestamp >= ($2::TIMESTAMPTZ - make_interval(secs => $3::int))
+             AND timestamp <= ($2::TIMESTAMPTZ + make_interval(secs => $3::int))
+           FOR UPDATE
+         )
+         RETURNING event_id`,
+        [trimmedDeviceId, rfidTs, CAM_CORRELATION_WINDOW, sessionId]
       );
-      if (camRes.rows.length > 0) {
+      if (matchResult.rows.length > 0) {
         cameraSync = true;
+      } else {
+        // Also check if any already matched camera event exists within the window for this device
+        const existingMatched = await client.query(
+          `SELECT event_id FROM camera_events_log
+           WHERE device_id = $1
+             AND status = 'matched'
+             AND mismatch = FALSE
+             AND timestamp >= ($2::TIMESTAMPTZ - make_interval(secs => $3::int))
+             AND timestamp <= ($2::TIMESTAMPTZ + make_interval(secs => $3::int))
+           LIMIT 1`,
+          [trimmedDeviceId, rfidTs, CAM_CORRELATION_WINDOW]
+        );
+        if (existingMatched.rows.length > 0) {
+          cameraSync = true;
+        }
       }
     } catch (e) {
-      console.error('Error checking camera events:', e);
+      console.error('Error reconciling camera events on RFID scan:', e);
+      // Roll back only the changes made in the camera reconciliation block
+      await client.query('ROLLBACK TO SAVEPOINT camera_sync');
     }
+
+    await client.query('COMMIT');
 
     const cartItems = itemsResult.rows;
     const cartTotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);

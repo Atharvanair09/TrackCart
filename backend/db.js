@@ -1,6 +1,12 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg'); // Added types for timestamp parsing
 const crypto = require('crypto');
 require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+// Register a custom type parser for PostgreSQL TIMESTAMP WITHOUT TIME ZONE (OID 1114).
+// The server stores timestamps in UTC; we append a 'Z' to force JavaScript Date to interpret them as UTC
+// rather than applying the local timezone (Asia/Calcutta).
+types.setTypeParser(1114, (value) => new Date(`${value}Z`));
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
