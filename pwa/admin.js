@@ -2276,14 +2276,12 @@ function setupNavigation() {
   // Demo Mode Switch
   const btnLive = document.getElementById('btn-mode-live');
   const btnDemo = document.getElementById('btn-mode-demo');
-  const demoBanner = document.getElementById('demo-banner-pill');
 
   btnLive?.addEventListener('click', () => {
     isDemoMode = false;
     localStorage.setItem('trackcart_demo_mode', 'false');
     btnLive.classList.add('active');
     btnDemo.classList.remove('active');
-    if (demoBanner) demoBanner.classList.add('hidden');
     showToast('Switched to Live PostgreSQL Database', 'info');
     refreshAllData();
   });
@@ -2293,7 +2291,6 @@ function setupNavigation() {
     localStorage.setItem('trackcart_demo_mode', 'true');
     btnDemo.classList.add('active', 'demo');
     btnLive.classList.remove('active');
-    if (demoBanner) demoBanner.classList.remove('hidden');
     showToast('Switched to Demo Analytics Simulation Mode', 'info');
     refreshAllData();
   });
@@ -2302,11 +2299,9 @@ function setupNavigation() {
   if (isDemoMode) {
     btnDemo?.classList.add('active', 'demo');
     btnLive?.classList.remove('active');
-    if (demoBanner) demoBanner.classList.remove('hidden');
   } else {
     btnLive?.classList.add('active');
     btnDemo?.classList.remove('active');
-    if (demoBanner) demoBanner.classList.add('hidden');
   }
 
   // Inventory Filters

@@ -22,7 +22,7 @@
       <aside id="admin-sidebar" class="admin-sidebar" aria-label="Main Navigation">
         <div class="sidebar-header">
           <div class="sidebar-brand">
-            <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="" style="width: 32px; height: 32px;"></div>
+            <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="TrackMart" class="brand-logo-img"></div>
             <div class="brand-titles">
               <span class="brand-name">TrackMart</span>
               <span class="brand-subtitle">Console Menu</span>
@@ -84,7 +84,7 @@
               </span>
               <span class="sidebar-toggle-text">Menu</span>
             </button>
-            <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="" style="width: 50px; height: 50px;"></div>
+            <div class="brand-logo-mark"><img src="src/assets/logo.png" alt="TrackMart" class="brand-logo-img"></div>
             <div class="brand-titles">
               <span class="brand-name">TrackMart</span>
               <span class="brand-subtitle">Smart Cart Operations & Intelligence</span>
@@ -106,59 +106,24 @@
               <span class="live-dot"></span>
               <span id="live-status-text">Live Sync</span>
             </div>
-
-            <!-- Active mode label -->
-            <span id="mode-label-text" style="font-size:0.72rem; font-weight:700; letter-spacing:0.05em; color:var(--text-secondary); padding:4px 10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; display:inline-block; min-width:180px; text-align:center;">
-              LIVE DATABASE DATA
-            </span>
           </div>
 
           <div class="top-bar-right">
-            <span class="admin-user-pill" id="hud-admin-identity">
-              <span>👤</span> Store Admin
-            </span>
-            <button id="btn-refresh-data" class="btn-header-action" title="Refresh Live Data">
-              <span>🔄</span> Sync
+            <button id="btn-action-add-prod" class="btn-primary" title="Add New Product">
+              <span>+</span> Add Product
             </button>
-            <button id="btn-export-csv" class="btn-header-action" title="Export CSV Report">
-              <span>💾</span> Export CSV
+            <button id="btn-action-restock" class="btn-secondary" title="Receive Inbound Stock / Adjust Damage">
+              <span>📥</span> Receive Stock
             </button>
-            <a href="/index.html" class="btn-header-action" title="Switch to Customer Cart Interface">
-              <span>🛒</span> Cart Interface
-            </a>
-            <button id="btn-admin-logout" class="btn-header-action logout" title="Sign out">
-              <span>🔒</span> Logout
+            <button id="btn-action-cycle-count" class="btn-secondary" title="Physical Inventory Count & Audit">
+              <span>⚖️</span> Physical Count
+            </button>
+            <button id="btn-action-thresholds" class="btn-secondary" title="Configure Low-Stock & Reorder Rules">
+              <span>⚙️</span> Reorder Rules
             </button>
           </div>
         </div>
        </header>  
-
-      <!-- 3. Store Action Sub-Header Strip -->
-      <section class="admin-action-bar">
-        <div class="action-bar-left">
-          <span class="store-badge">Flagship Superstore #104</span>
-          <span class="store-meta-pill">RFID Smart Gateway Online</span>
-          <span class="store-meta-pill" id="hud-live-clock">--:--:--</span>
-          <span id="demo-banner-pill" class="status-pill status-expired hidden" style="background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe;">
-            ✨ DEMO SIMULATION ACTIVE
-          </span>
-        </div>
-
-        <div class="action-bar-right">
-          <button id="btn-action-add-prod" class="btn-primary">
-            <span>+</span> Add Product
-          </button>
-          <button id="btn-action-restock" class="btn-secondary">
-            <span>📥</span> Receive Stock
-          </button>
-          <button id="btn-action-cycle-count" class="btn-secondary">
-            <span>⚖️</span> Physical Count
-          </button>
-          <button id="btn-action-thresholds" class="btn-secondary">
-            <span>⚙️</span> Reorder Rules
-          </button>
-        </div>
-      </section>
 
       <!-- 4. Main Admin Viewport Container -->
       <main class="admin-main-container">
@@ -1246,7 +1211,7 @@
           </div>
           <form id="form-cycle-count">
             <div class="modal-body">
-              <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px 0;">
+              <p style="font-size: 0.85rem; color: #cbd5e1; margin: 0 0 16px 0;">
                 Enter verified physical shelf count. The system will compute discrepancy delta and adjust inventory safely without violating active customer cart reservations.
               </p>
 
@@ -1257,18 +1222,18 @@
                 </select>
               </div>
 
-              <div style="display:flex; gap:12px; background:var(--bg-surface-secondary); padding:12px; border-radius:var(--radius-md); margin-bottom:16px;">
+              <div style="display:flex; gap:12px; background:#18181b; border:1px solid #27272a; padding:12px; border-radius:var(--radius-md); margin-bottom:16px;">
                 <div style="flex:1;">
-                  <span style="font-size:0.75rem; color:var(--text-muted);">Current On-Hand:</span>
-                  <div id="count-sys-onhand" style="font-size:1.1rem; font-weight:700;">20</div>
+                  <span style="font-size:0.75rem; color:#94a3b8;">Current On-Hand:</span>
+                  <div id="count-sys-onhand" style="font-size:1.1rem; font-weight:700; color:#ffffff;">20</div>
                 </div>
                 <div style="flex:1;">
-                  <span style="font-size:0.75rem; color:var(--text-muted);">Reserved in Carts:</span>
-                  <div id="count-sys-reserved" style="font-size:1.1rem; font-weight:700; color:var(--color-warning-dark);">0</div>
+                  <span style="font-size:0.75rem; color:#94a3b8;">Reserved in Carts:</span>
+                  <div id="count-sys-reserved" style="font-size:1.1rem; font-weight:700; color:#fbbf24;">0</div>
                 </div>
                 <div style="flex:1;">
-                  <span style="font-size:0.75rem; color:var(--text-muted);">Available:</span>
-                  <div id="count-sys-available" style="font-size:1.1rem; font-weight:700; color:var(--color-success-dark);">20</div>
+                  <span style="font-size:0.75rem; color:#94a3b8;">Available:</span>
+                  <div id="count-sys-available" style="font-size:1.1rem; font-weight:700; color:#34d399;">20</div>
                 </div>
               </div>
 
@@ -1277,10 +1242,10 @@
                 <input type="number" id="count-physical-input" min="0" required placeholder="Enter physically counted count" />
               </div>
 
-              <div style="background:#f8fafc; border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+              <div style="background:#18181b; border:1px solid #27272a; border-radius:var(--radius-md); padding:12px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                  <span style="font-size:0.8rem; font-weight:600;">Discrepancy Variance:</span>
-                  <div id="count-discrepancy-sub" style="font-size:0.75rem; color:var(--text-muted);">No variance detected</div>
+                  <span style="font-size:0.8rem; font-weight:600; color:#ffffff;">Discrepancy Variance:</span>
+                  <div id="count-discrepancy-sub" style="font-size:0.75rem; color:#94a3b8;">No variance detected</div>
                 </div>
                 <span id="count-discrepancy-badge" class="kpi-badge info">0 Units</span>
               </div>
