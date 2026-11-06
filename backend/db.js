@@ -546,7 +546,7 @@ async function initDb() {
       WHERE status = 'active'
         AND cart_id IN (SELECT cart_id FROM carts WHERE status = 'available')
     `);
-    if (staleRes.rowCount > 0) {
+    if (staleRes?.rowCount > 0) {
       console.log(`[db] Startup cleanup: ${staleRes.rowCount} stale active session(s) marked as expired (cart was already 'available').`);
     }
   } catch (err) {

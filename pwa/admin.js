@@ -91,6 +91,236 @@ let basketData = null;
 let dashboardStats = null;
 let analyticsData = null;
 
+// ==========================================
+// DEMO MODE — Complete Isolated Data Layer
+// All demo data uses unique IDs (DEMO-001..DEMO-015) completely
+// separate from real PostgreSQL product IDs (PROD-001..PROD-011).
+// No backend API calls are made in demo mode.
+// ==========================================
+
+const _D_PRODUCTS = [
+  { id:'DEMO-001', dbId:1, rfid:'DRF001', name:'Premium NC Headphones', category:'Electronics', onHand:45, reserved:5, available:40, status:'In Stock', cost:42.00, price:89.99, reorderLevel:15, safetyStock:8, leadTimeDays:7, targetCoverageDays:21, lastRestocked:'2026-10-15', expiryDate:null, batchNumber:null, supplier:'SoundTech Asia', soldUnits:128, revenue:11518.72, isActive:true },
+  { id:'DEMO-002', dbId:2, rfid:'DRF002', name:'Artisan Cold Brew 500ml', category:'Beverages', onHand:120, reserved:12, available:108, status:'In Stock', cost:2.10, price:5.49, reorderLevel:30, safetyStock:15, leadTimeDays:2, targetCoverageDays:14, lastRestocked:'2026-11-01', expiryDate:'2026-12-20', batchNumber:'CB-2026-11', supplier:'BrewCraft Ltd', soldUnits:691, revenue:3793.59, isActive:true },
+  { id:'DEMO-003', dbId:3, rfid:'DRF003', name:'Organic Protein Granola', category:'Snacks', onHand:0, reserved:0, available:0, status:'Out of Stock', cost:1.40, price:3.29, reorderLevel:30, safetyStock:15, leadTimeDays:3, targetCoverageDays:14, lastRestocked:'2026-10-02', expiryDate:'2026-10-25', batchNumber:'GB-2026-10', supplier:'NutriPure Co', soldUnits:0, revenue:0, isActive:true },
+  { id:'DEMO-004', dbId:4, rfid:'DRF004', name:'Smart Fitness Band', category:'Electronics', onHand:18, reserved:3, available:15, status:'In Stock', cost:22.00, price:49.99, reorderLevel:10, safetyStock:5, leadTimeDays:5, targetCoverageDays:21, lastRestocked:'2026-10-20', expiryDate:null, batchNumber:null, supplier:'FitTech Corp', soldUnits:62, revenue:3099.38, isActive:true },
+  { id:'DEMO-005', dbId:5, rfid:'DRF005', name:'Himalayan Mineral Water 1L', category:'Beverages', onHand:200, reserved:8, available:192, status:'In Stock', cost:0.80, price:2.99, reorderLevel:50, safetyStock:25, leadTimeDays:1, targetCoverageDays:7, lastRestocked:'2026-11-04', expiryDate:'2027-05-15', batchNumber:'HW-2026-11', supplier:'PureSource Inc', soldUnits:962, revenue:2876.38, isActive:true },
+  { id:'DEMO-006', dbId:6, rfid:'DRF006', name:'Mixed Nut Trail Pack 150g', category:'Snacks', onHand:35, reserved:4, available:31, status:'In Stock', cost:3.10, price:6.49, reorderLevel:20, safetyStock:10, leadTimeDays:3, targetCoverageDays:14, lastRestocked:'2026-10-25', expiryDate:'2026-11-28', batchNumber:'NT-2026-10', supplier:'NutriPure Co', soldUnits:218, revenue:1414.82, isActive:true },
+  { id:'DEMO-007', dbId:7, rfid:'DRF007', name:'UV Sanitizer Pouch', category:'Health', onHand:8, reserved:1, available:7, status:'Low Stock', cost:6.50, price:14.99, reorderLevel:10, safetyStock:5, leadTimeDays:5, targetCoverageDays:21, lastRestocked:'2026-09-10', expiryDate:null, batchNumber:null, supplier:'HealthShield Ltd', soldUnits:84, revenue:1259.16, isActive:true },
+  { id:'DEMO-008', dbId:8, rfid:'DRF008', name:'Matcha Latte Powder 200g', category:'Beverages', onHand:62, reserved:6, available:56, status:'In Stock', cost:5.80, price:12.99, reorderLevel:20, safetyStock:10, leadTimeDays:4, targetCoverageDays:21, lastRestocked:'2026-10-18', expiryDate:'2027-03-01', batchNumber:'ML-2026-10', supplier:'Zen Harvest', soldUnits:143, revenue:1857.57, isActive:true },
+  { id:'DEMO-009', dbId:9, rfid:'DRF009', name:'Stainless Steel Straw Set', category:'Accessories', onHand:3, reserved:0, available:3, status:'Low Stock', cost:3.80, price:8.99, reorderLevel:8, safetyStock:4, leadTimeDays:4, targetCoverageDays:14, lastRestocked:'2026-09-15', expiryDate:null, batchNumber:null, supplier:'EcoLife Store', soldUnits:92, revenue:827.08, isActive:true },
+  { id:'DEMO-010', dbId:10, rfid:'DRF010', name:'Vegan Chocolate Bar 70g', category:'Snacks', onHand:88, reserved:9, available:79, status:'In Stock', cost:2.20, price:4.79, reorderLevel:25, safetyStock:12, leadTimeDays:2, targetCoverageDays:14, lastRestocked:'2026-11-01', expiryDate:'2026-11-14', batchNumber:'VC-2026-11', supplier:'PureChoc Labs', soldUnits:804, revenue:3851.16, isActive:true },
+  { id:'DEMO-011', dbId:11, rfid:'DRF011', name:'Sports Compression Socks', category:'Accessories', onHand:24, reserved:2, available:22, status:'In Stock', cost:7.50, price:16.99, reorderLevel:12, safetyStock:6, leadTimeDays:5, targetCoverageDays:21, lastRestocked:'2026-10-05', expiryDate:null, batchNumber:null, supplier:'ActiveGear Co', soldUnits:38, revenue:645.62, isActive:true },
+  { id:'DEMO-012', dbId:12, rfid:'DRF012', name:'Vitamin C Effervescent 20s', category:'Health', onHand:5, reserved:0, available:5, status:'Low Stock', cost:4.20, price:9.99, reorderLevel:8, safetyStock:4, leadTimeDays:3, targetCoverageDays:14, lastRestocked:'2026-09-20', expiryDate:'2026-12-10', batchNumber:'VC-2026-09', supplier:'HealthShield Ltd', soldUnits:71, revenue:709.29, isActive:true },
+  { id:'DEMO-013', dbId:13, rfid:'DRF013', name:'Eco Reusable Tote Bag', category:'Accessories', onHand:140, reserved:0, available:140, status:'In Stock', cost:3.00, price:7.49, reorderLevel:30, safetyStock:15, leadTimeDays:5, targetCoverageDays:21, lastRestocked:'2026-10-10', expiryDate:null, batchNumber:null, supplier:'EcoLife Store', soldUnits:29, revenue:217.21, isActive:true },
+  { id:'DEMO-014', dbId:14, rfid:'DRF014', name:'Espresso Coffee Pod x10', category:'Beverages', onHand:76, reserved:11, available:65, status:'In Stock', cost:3.90, price:7.99, reorderLevel:25, safetyStock:12, leadTimeDays:2, targetCoverageDays:14, lastRestocked:'2026-11-02', expiryDate:'2027-01-15', batchNumber:'EP-2026-11', supplier:'BrewCraft Ltd', soldUnits:330, revenue:2636.70, isActive:true },
+  { id:'DEMO-015', dbId:15, rfid:'DRF015', name:'Wireless Charging Pad', category:'Electronics', onHand:14, reserved:2, available:12, status:'In Stock', cost:12.00, price:29.99, reorderLevel:8, safetyStock:4, leadTimeDays:6, targetCoverageDays:21, lastRestocked:'2026-10-22', expiryDate:null, batchNumber:null, supplier:'SoundTech Asia', soldUnits:47, revenue:1409.53, isActive:true }
+];
+
+const _D_MOVEMENTS = [
+  { id:'DMOV-008', timestamp:'2026-11-06 14:30:00', productId:'DEMO-001', productName:'Premium NC Headphones', rfid:'DRF001', action:'CHECKOUT', delta:-2, beforeQty:47, afterQty:45, ref:'DCRT-9910-AX', notes:'Express checkout RFID settlement' },
+  { id:'DMOV-007', timestamp:'2026-11-06 12:15:00', productId:'DEMO-010', productName:'Vegan Chocolate Bar 70g', rfid:'DRF010', action:'CHECKOUT', delta:-3, beforeQty:91, afterQty:88, ref:'DCRT-9905-B', notes:'Standard cart checkout' },
+  { id:'DMOV-006', timestamp:'2026-11-06 10:00:00', productId:'DEMO-005', productName:'Himalayan Mineral Water 1L', rfid:'DRF005', action:'RESTOCK', delta:50, beforeQty:150, afterQty:200, ref:'DPO-2026-1104', notes:'Inbound delivery — PureSource Inc' },
+  { id:'DMOV-005', timestamp:'2026-11-05 16:45:00', productId:'DEMO-003', productName:'Organic Protein Granola', rfid:'DRF003', action:'DAMAGE_WRITEOFF', delta:-8, beforeQty:8, afterQty:0, ref:'DDMG-WRT-022', notes:'Expired stock removal — batch GB-2026-10' },
+  { id:'DMOV-004', timestamp:'2026-11-05 14:00:00', productId:'DEMO-009', productName:'Stainless Steel Straw Set', rfid:'DRF009', action:'CYCLE_COUNT', delta:-4, beforeQty:7, afterQty:3, ref:'DAUDIT-FLOOR-B', notes:'Physical shelf count — 4 units missing' },
+  { id:'DMOV-003', timestamp:'2026-11-05 11:30:00', productId:'DEMO-014', productName:'Espresso Coffee Pod x10', rfid:'DRF014', action:'RESTOCK', delta:30, beforeQty:46, afterQty:76, ref:'DPO-2026-1102', notes:'Fresh batch delivery — BrewCraft Ltd' },
+  { id:'DMOV-002', timestamp:'2026-11-04 15:00:00', productId:'DEMO-002', productName:'Artisan Cold Brew 500ml', rfid:'DRF002', action:'CHECKOUT', delta:-12, beforeQty:132, afterQty:120, ref:'DCRT-9881-K', notes:'Bulk cart checkout — 12 units' },
+  { id:'DMOV-001', timestamp:'2026-11-04 09:00:00', productId:'DEMO-007', productName:'UV Sanitizer Pouch', rfid:'DRF007', action:'CHECKOUT', delta:-3, beforeQty:11, afterQty:8, ref:'DCRT-9872-M', notes:'Cart checkout — low stock alert triggered' }
+];
+
+const _D_KPI = {
+  totalProducts: 15,
+  availableStock: 775,
+  activeShoppingCarts: 3,
+  todaySales: 2847.50,
+  completedOrders: 47,
+  lowStockCount: 3,
+  outOfStockCount: 1,
+  grossProfit: 12435.80,
+  totalOnHand: 838,
+  totalReserved: 63,
+  totalAssetVal: 48234.00
+};
+
+const DEMO_DASHBOARD_DATA = {
+  success: true,
+  kpis: _D_KPI,
+  products: _D_PRODUCTS,
+  movements: _D_MOVEMENTS,
+  storeInsights: {
+    lowStock: [
+      { id:'DEMO-007', name:'UV Sanitizer Pouch', available:7, reorderLevel:10, suggestedReorderQty:25, status:'Low Stock' },
+      { id:'DEMO-009', name:'Stainless Steel Straw Set', available:3, reorderLevel:8, suggestedReorderQty:20, status:'Low Stock' },
+      { id:'DEMO-012', name:'Vitamin C Effervescent 20s', available:5, reorderLevel:8, suggestedReorderQty:18, status:'Low Stock' },
+      { id:'DEMO-003', name:'Organic Protein Granola', available:0, reorderLevel:30, suggestedReorderQty:60, status:'Out of Stock' }
+    ],
+    stockoutRisk: [
+      { id:'DEMO-009', name:'Stainless Steel Straw Set', available:3, daysUntilStockout:2, stockoutDate:'2026-11-08', leadTimeDays:4 },
+      { id:'DEMO-012', name:'Vitamin C Effervescent 20s', available:5, daysUntilStockout:4, stockoutDate:'2026-11-10', leadTimeDays:3 }
+    ],
+    expiringSoon: [
+      { id:'DEMO-003', name:'Organic Protein Granola', expiryDate:'2026-10-25', batchNumber:'GB-2026-10', daysUntilExpiry:-12, available:0, isExpired:true },
+      { id:'DEMO-010', name:'Vegan Chocolate Bar 70g', expiryDate:'2026-11-14', batchNumber:'VC-2026-11', daysUntilExpiry:8, available:79, isExpired:false },
+      { id:'DEMO-006', name:'Mixed Nut Trail Pack 150g', expiryDate:'2026-11-28', batchNumber:'NT-2026-10', daysUntilExpiry:22, available:31, isExpired:false }
+    ],
+    slowMoving: [
+      { id:'DEMO-013', name:'Eco Reusable Tote Bag', available:140, soldUnits:29, avgDailySales:0.5, classification:'Slow Moving' },
+      { id:'DEMO-011', name:'Sports Compression Socks', available:22, soldUnits:38, avgDailySales:0.6, classification:'Slow Moving' }
+    ],
+    reorderRecommendations: [
+      { id:'DEMO-009', name:'Stainless Steel Straw Set', available:3, targetStock:20, suggestedQty:20, supplier:'EcoLife Store', leadTimeDays:4, reason:'Critical stockout risk — 2 days supply remaining' },
+      { id:'DEMO-003', name:'Organic Protein Granola', available:0, targetStock:60, suggestedQty:60, supplier:'NutriPure Co', leadTimeDays:3, reason:'Out of stock — reorder immediately' },
+      { id:'DEMO-012', name:'Vitamin C Effervescent 20s', available:5, targetStock:18, suggestedQty:18, supplier:'HealthShield Ltd', leadTimeDays:3, reason:'Low stock — 4 days supply remaining' },
+      { id:'DEMO-007', name:'UV Sanitizer Pouch', available:7, targetStock:25, suggestedQty:18, supplier:'HealthShield Ltd', leadTimeDays:5, reason:'Below reorder threshold (10 units)' }
+    ],
+    suggestedCombos: [
+      { title:'Cold Brew + Protein Granola', transactions:34, lift:2.4, recommendation:'Bundle at checkout lane — high co-purchase affinity (Lift 2.4x)' },
+      { title:'Headphones + Charging Pad', transactions:28, lift:2.1, recommendation:'Electronics cross-sell display — frequently purchased together (Lift 2.1x)' },
+      { title:'Trail Mix + Mineral Water', transactions:19, lift:1.8, recommendation:'Healthy snack combo promotion — moderate affinity (Lift 1.8x)' }
+    ],
+    recentActivity: _D_MOVEMENTS.slice(0, 6)
+  },
+  todaysPriorities: [
+    { id:'prio-reorder', type:'reorder', badge:'Reorder Urgently', priority:'high', title:'Reorder Stainless Steel Straw Set', subtitle:'2 days of stock remaining (3 units on shelf). Recommended reorder: 20 units from EcoLife Store.', targetTab:'forecasting', targetId:'DEMO-009', actionLabel:'Review Reorder' },
+    { id:'prio-expiry', type:'expiry', badge:'Expired Stock', priority:'danger', title:'Remove Expired Organic Protein Granola', subtitle:'Product expired 2026-10-25 (12 days ago). Write off remaining units immediately — batch GB-2026-10.', targetTab:'expiry', targetId:'DEMO-003', actionLabel:'Inspect Expiry' },
+    { id:'prio-promo', type:'promotion', badge:'Promote Slow Mover', priority:'normal', title:'Consider Promotion for Eco Reusable Tote Bag', subtitle:'Low velocity (0.5 units/day) with 140 units in stock. Recommend 15% promotional discount or bundle.', targetTab:'expiry', targetId:'DEMO-013', actionLabel:'Create Promotion' },
+    { id:'prio-combo', type:'combo', badge:'Market Basket Synergy', priority:'normal', title:'Suggested Combo: Cold Brew + Protein Granola', subtitle:'Frequently co-purchased in 34 transactions (Lift 2.4x). Recommended for cart cross-sell.', targetTab:'basket', actionLabel:'View Basket Analysis' }
+  ]
+};
+
+// Demo Sessions Data
+const DEMO_SESSIONS_DATA = [
+  { session_id:'DEMO_SESS_003', cart_id:'CART_01', user_id:'GUEST_003', status:'active', started_at: (() => { const d=new Date(Date.now()-8*60000); return d.toISOString().replace('T',' ').slice(0,19); })(), ended_at:null, item_count:2, subtotal:94.98, sale_id:null,
+    items:[ {product_id:'DEMO-001',name:'Premium NC Headphones',category:'Electronics',quantity:1,unit_price_at_addition:89.99,subtotal:89.99}, {product_id:'DEMO-002',name:'Artisan Cold Brew 500ml',category:'Beverages',quantity:1,unit_price_at_addition:5.49,subtotal:5.49} ] },
+  { session_id:'DEMO_SESS_002', cart_id:'CART_02', user_id:'GUEST_002', status:'completed', started_at:'2026-11-06 10:15:00', ended_at:'2026-11-06 10:52:00', item_count:5, subtotal:38.74, sale_id:'DEMO_SALE_002',
+    items:[ {product_id:'DEMO-010',name:'Vegan Chocolate Bar 70g',category:'Snacks',quantity:3,unit_price_at_addition:4.79,subtotal:14.37}, {product_id:'DEMO-005',name:'Himalayan Mineral Water 1L',category:'Beverages',quantity:2,unit_price_at_addition:2.99,subtotal:5.98}, {product_id:'DEMO-014',name:'Espresso Coffee Pod x10',category:'Beverages',quantity:2,unit_price_at_addition:7.99,subtotal:15.98} ] },
+  { session_id:'DEMO_SESS_001', cart_id:'CART_03', user_id:'GUEST_001', status:'completed', started_at:'2026-11-06 09:00:00', ended_at:'2026-11-06 09:38:00', item_count:3, subtotal:144.97, sale_id:'DEMO_SALE_001',
+    items:[ {product_id:'DEMO-001',name:'Premium NC Headphones',category:'Electronics',quantity:1,unit_price_at_addition:89.99,subtotal:89.99}, {product_id:'DEMO-015',name:'Wireless Charging Pad',category:'Electronics',quantity:1,unit_price_at_addition:29.99,subtotal:29.99}, {product_id:'DEMO-004',name:'Smart Fitness Band',category:'Electronics',quantity:1,unit_price_at_addition:49.99,subtotal:49.99} ] },
+  { session_id:'DEMO_SESS_000', cart_id:'CART_01', user_id:null, status:'cancelled', started_at:'2026-11-05 17:30:00', ended_at:'2026-11-05 17:35:00', item_count:0, subtotal:0, sale_id:null, items:[] }
+];
+
+// Demo Sales Data
+const DEMO_SALES_DATA = [
+  { sale_id:'DEMO_SALE_001', session_id:'DEMO_SESS_001', subtotal:169.97, tax_rate:0.0825, tax_amount:14.02, total:183.99, item_count:3, completed_at:'2026-11-06 09:38:00',
+    lineItems:[ {product_id:'DEMO-001',name:'Premium NC Headphones',category:'Electronics',quantity:1,unit_price:89.99,line_subtotal:89.99}, {product_id:'DEMO-015',name:'Wireless Charging Pad',category:'Electronics',quantity:1,unit_price:29.99,line_subtotal:29.99}, {product_id:'DEMO-004',name:'Smart Fitness Band',category:'Electronics',quantity:1,unit_price:49.99,line_subtotal:49.99} ] },
+  { sale_id:'DEMO_SALE_002', session_id:'DEMO_SESS_002', subtotal:36.33, tax_rate:0.0825, tax_amount:3.00, total:39.33, item_count:7, completed_at:'2026-11-06 10:52:00',
+    lineItems:[ {product_id:'DEMO-010',name:'Vegan Chocolate Bar 70g',category:'Snacks',quantity:3,unit_price:4.79,line_subtotal:14.37}, {product_id:'DEMO-005',name:'Himalayan Mineral Water 1L',category:'Beverages',quantity:2,unit_price:2.99,line_subtotal:5.98}, {product_id:'DEMO-014',name:'Espresso Coffee Pod x10',category:'Beverages',quantity:2,unit_price:7.99,line_subtotal:15.98} ] },
+  { sale_id:'DEMO_SALE_000', session_id:null, subtotal:12435.80, tax_rate:0.0825, tax_amount:1025.95, total:13461.75, item_count:2622, completed_at:'2026-11-05 23:59:00',
+    lineItems:[ {product_id:'DEMO-001',name:'Premium NC Headphones',category:'Electronics',quantity:126,unit_price:89.99,line_subtotal:11338.74}, {product_id:'DEMO-010',name:'Vegan Chocolate Bar 70g',category:'Snacks',quantity:800,unit_price:4.79,line_subtotal:3832.00}, {product_id:'DEMO-002',name:'Artisan Cold Brew 500ml',category:'Beverages',quantity:688,unit_price:5.49,line_subtotal:3777.12}, {product_id:'DEMO-005',name:'Himalayan Mineral Water 1L',category:'Beverages',quantity:959,unit_price:2.99,line_subtotal:2867.41}, {product_id:'DEMO-004',name:'Smart Fitness Band',category:'Electronics',quantity:61,unit_price:49.99,line_subtotal:3049.39} ] }
+];
+
+// Demo Forecast Data
+const DEMO_FORECAST_DATA = {
+  success: true,
+  isSimulated: true,
+  forecast: _D_PRODUCTS.map(p => {
+    const avgDaily = p.soldUnits > 0 ? +(p.soldUnits / 30).toFixed(2) : 0;
+    const days = avgDaily > 0 ? Math.min(Math.round(p.available / avgDaily), 999) : 999;
+    const stockoutDate = avgDaily > 0 ? (() => { const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().split('T')[0]; })() : 'No forecast';
+    const target = Math.round(avgDaily * p.targetCoverageDays + p.safetyStock);
+    const reorderQty = Math.max(0, target - p.available);
+    let cls = 'Well Stocked';
+    if (p.available <= 0) cls = 'Out of Stock';
+    else if (days <= 3) cls = 'Critical Stockout Risk';
+    else if (p.available <= p.reorderLevel) cls = 'Low Stock';
+    else if (avgDaily >= 20) cls = 'Fast Moving';
+    else if (avgDaily < 1 && p.soldUnits > 0) cls = 'Slow Moving';
+    else if (p.soldUnits === 0) cls = 'Dormant Stock';
+    return { id:p.id, name:p.name, category:p.category, available:p.available, soldUnits:p.soldUnits, avgDailySales:avgDaily, daysUntilStockout:days, stockoutDate, targetStock:target, suggestedReorderQty:reorderQty, classification:cls, recommendationReason: reorderQty>0 ? `Order ${reorderQty} units from ${p.supplier} (${p.leadTimeDays}d lead time)` : 'Stock level adequate for current demand', supplier:p.supplier, leadTimeDays:p.leadTimeDays };
+  })
+};
+
+// Demo Expiry Data
+const DEMO_EXPIRY_DATA = {
+  success: true,
+  isSimulated: true,
+  items: [
+    { productId:'DEMO-003', name:'Organic Protein Granola', batchNumber:'GB-2026-10', expiryDate:'2026-10-25', daysUntilExpiry:-12, quantityAtRisk:0, status:'expired', action:'Remove from shelves immediately — EXPIRED', suggestedDiscount:0 },
+    { productId:'DEMO-010', name:'Vegan Chocolate Bar 70g', batchNumber:'VC-2026-11', expiryDate:'2026-11-14', daysUntilExpiry:8, quantityAtRisk:79, status:'expiring_7d', action:'Apply 25% promotional discount — 8 days to expiry', suggestedDiscount:25 },
+    { productId:'DEMO-006', name:'Mixed Nut Trail Pack 150g', batchNumber:'NT-2026-10', expiryDate:'2026-11-28', daysUntilExpiry:22, quantityAtRisk:31, status:'expiring_30d', action:'Apply 10% promotional discount — 22 days to expiry', suggestedDiscount:10 },
+    { productId:'DEMO-002', name:'Artisan Cold Brew 500ml', batchNumber:'CB-2026-11', expiryDate:'2026-12-20', daysUntilExpiry:44, quantityAtRisk:120, status:'healthy', action:'Monitor regularly — batch healthy', suggestedDiscount:0 },
+    { productId:'DEMO-012', name:'Vitamin C Effervescent 20s', batchNumber:'VC-2026-09', expiryDate:'2026-12-10', daysUntilExpiry:34, quantityAtRisk:5, status:'healthy', action:'Monitor regularly — batch healthy', suggestedDiscount:0 },
+    { productId:'DEMO-005', name:'Himalayan Mineral Water 1L', batchNumber:'HW-2026-11', expiryDate:'2027-05-15', daysUntilExpiry:190, quantityAtRisk:200, status:'healthy', action:'Healthy shelf life — no action needed', suggestedDiscount:0 }
+  ]
+};
+
+// Demo Market Basket Data
+const DEMO_BASKET_DATA = {
+  success: true,
+  isSimulated: true,
+  totalEligibleTransactions: 47,
+  combos: [
+    { title:'Cold Brew + Protein Granola', transactions:34, lift:2.4, confidence:'85%', recommendation:'Bundle at checkout — high co-purchase affinity detected across 34 transactions' },
+    { title:'Headphones + Wireless Charging Pad', transactions:28, lift:2.1, confidence:'78%', recommendation:'Electronics cross-sell endcap display — complement purchase pattern' },
+    { title:'Trail Mix + Mineral Water', transactions:19, lift:1.8, confidence:'62%', recommendation:'Healthy snack combo display — moderate affinity across 19 baskets' }
+  ],
+  pairs: [
+    { productA:{id:'DEMO-002',name:'Artisan Cold Brew 500ml',category:'Beverages'}, productB:{id:'DEMO-003',name:'Organic Protein Granola',category:'Snacks'}, coOccurrenceCount:34, support:0.72, confidenceAtoB:0.85, lift:2.4, suggestedAction:'Create bundle promotion — high lift value' },
+    { productA:{id:'DEMO-001',name:'Premium NC Headphones',category:'Electronics'}, productB:{id:'DEMO-015',name:'Wireless Charging Pad',category:'Electronics'}, coOccurrenceCount:28, support:0.60, confidenceAtoB:0.78, lift:2.1, suggestedAction:'Cross-sell display on electronics shelf' },
+    { productA:{id:'DEMO-006',name:'Mixed Nut Trail Pack 150g',category:'Snacks'}, productB:{id:'DEMO-005',name:'Himalayan Mineral Water 1L',category:'Beverages'}, coOccurrenceCount:19, support:0.40, confidenceAtoB:0.62, lift:1.8, suggestedAction:'Healthy lifestyle combo — moderate cross-sell potential' },
+    { productA:{id:'DEMO-009',name:'Stainless Steel Straw Set',category:'Accessories'}, productB:{id:'DEMO-013',name:'Eco Reusable Tote Bag',category:'Accessories'}, coOccurrenceCount:15, support:0.32, confidenceAtoB:0.71, lift:1.6, suggestedAction:'Eco-conscious bundle — place near checkout' },
+    { productA:{id:'DEMO-014',name:'Espresso Coffee Pod x10',category:'Beverages'}, productB:{id:'DEMO-008',name:'Matcha Latte Powder 200g',category:'Beverages'}, coOccurrenceCount:11, support:0.23, confidenceAtoB:0.58, lift:1.4, suggestedAction:'Hot-drink cross-sell recommendation' }
+  ]
+};
+
+// Demo Analytics Data — fully deterministic (no Math.random)
+const DEMO_ANALYTICS_DATA = (() => {
+  const baseDate = new Date('2026-10-24');
+  const revArr  = [384.50,572.30,287.00,668.75,479.25,764.80,605.20,892.40,701.50,510.75,987.60,797.30,638.00,447.50];
+  const ordArr  = [12,18,9,21,15,24,19,28,22,16,31,25,20,14];
+  const unitArr = [34,51,25,59,42,67,53,79,62,45,87,70,56,39];
+  const ts=[],us=[],as=[];
+  for(let i=0;i<14;i++){
+    const d=new Date(baseDate); d.setDate(d.getDate()+i);
+    const bucket=d.toISOString().split('T')[0];
+    ts.push({bucket,orders:ordArr[i],revenue:revArr[i],subtotal:+(revArr[i]/1.0825).toFixed(2)});
+    us.push({bucket,units:unitArr[i]});
+    as.push({bucket,aov:+(revArr[i]/ordArr[i]).toFixed(2)});
+  }
+  const stockDist = _D_PRODUCTS.map(p=>({name:p.name,onHand:p.onHand,reserved:p.reserved,available:p.available}));
+  return {
+    success:true, isSimulated:true,
+    timeSeries:ts, unitSeries:us, aovSeries:as,
+    categorySales:[
+      {category:'Electronics',revenue:17077.22,units:364},
+      {category:'Beverages',revenue:13081.20,units:2740},
+      {category:'Snacks',revenue:5265.98,units:1051},
+      {category:'Accessories',revenue:1689.91,units:159},
+      {category:'Health',revenue:1968.45,units:155}
+    ],
+    topProducts:[
+      {id:'DEMO-001',name:'Premium NC Headphones',revenue:11518.72,units:128},
+      {id:'DEMO-010',name:'Vegan Chocolate Bar 70g',revenue:3851.16,units:804},
+      {id:'DEMO-002',name:'Artisan Cold Brew 500ml',revenue:3793.59,units:691},
+      {id:'DEMO-005',name:'Himalayan Mineral Water 1L',revenue:2876.38,units:962},
+      {id:'DEMO-014',name:'Espresso Coffee Pod x10',revenue:2636.70,units:330},
+      {id:'DEMO-004',name:'Smart Fitness Band',revenue:3099.38,units:62},
+      {id:'DEMO-008',name:'Matcha Latte Powder 200g',revenue:1857.57,units:143},
+      {id:'DEMO-015',name:'Wireless Charging Pad',revenue:1409.53,units:47}
+    ],
+    stockDistribution: stockDist,
+    inventoryMovements:[
+      {action:'RESTOCK',count:12,totalUnits:380},
+      {action:'CHECKOUT',count:47,totalUnits:263},
+      {action:'CYCLE_COUNT',count:4,totalUnits:6},
+      {action:'DAMAGE_WRITEOFF',count:2,totalUnits:11}
+    ],
+    expiryStatusChart:[
+      {label:'Healthy (>30d)',count:9,units:502},
+      {label:'Expiring in 30d',count:1,units:31},
+      {label:'Expiring in 7d',count:1,units:79},
+      {label:'Expired',count:1,units:0}
+    ],
+    basketPairs:[
+      {productA:{id:'DEMO-002',name:'Artisan Cold Brew 500ml'},productB:{id:'DEMO-003',name:'Organic Protein Granola'},coOccurrenceCount:34,lift:2.4},
+      {productA:{id:'DEMO-001',name:'Premium NC Headphones'},productB:{id:'DEMO-015',name:'Wireless Charging Pad'},coOccurrenceCount:28,lift:2.1},
+      {productA:{id:'DEMO-006',name:'Mixed Nut Trail Pack 150g'},productB:{id:'DEMO-005',name:'Himalayan Mineral Water 1L'},coOccurrenceCount:19,lift:1.8},
+      {productA:{id:'DEMO-009',name:'Stainless Steel Straw Set'},productB:{id:'DEMO-013',name:'Eco Reusable Tote Bag'},coOccurrenceCount:15,lift:1.6},
+      {productA:{id:'DEMO-014',name:'Espresso Coffee Pod x10'},productB:{id:'DEMO-008',name:'Matcha Latte Powder 200g'},coOccurrenceCount:11,lift:1.4}
+    ],
+    activeSessions:3
+  };
+})();
+
 // Filter States
 let inventoryFilter = {
   search: '',
@@ -212,11 +442,19 @@ async function fetchWithAuth(url, options = {}) {
 }
 
 async function loadDashboardData() {
+  if (isDemoMode) {
+    dashboardStats = DEMO_DASHBOARD_DATA;
+    products = DEMO_DASHBOARD_DATA.products || [];
+    movements = DEMO_DASHBOARD_DATA.movements || [];
+    renderDashboard();
+    renderInventoryTable();
+    renderMovementsTable();
+    populateProductSelects();
+    return;
+  }
   try {
-    const demoQuery = isDemoMode ? '?demo=true' : '';
-    const res = await fetchWithAuth(`${API_BASE}/admin/dashboard${demoQuery}`);
+    const res = await fetchWithAuth(`${API_BASE}/admin/dashboard`);
     const data = await res.json();
-
     if (data.success) {
       dashboardStats = data;
       products = data.products || [];
@@ -232,43 +470,6 @@ async function loadDashboardData() {
   }
 }
 
-// Demo sessions — deterministic mock data for demonstration mode
-const DEMO_SESSIONS_DATA = [
-  {
-    session_id: 'DEMO_SESS_003', cart_id: 'CART_01', user_id: 'GUEST_003',
-    status: 'active', started_at: new Date(Date.now() - 8 * 60000).toISOString().replace('T', ' ').slice(0, 19),
-    ended_at: null, item_count: 2, subtotal: 43.98, sale_id: null,
-    items: [
-      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price_at_addition: 39.99, subtotal: 39.99 },
-      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 1, unit_price_at_addition: 3.99, subtotal: 3.99 }
-    ]
-  },
-  {
-    session_id: 'DEMO_SESS_002', cart_id: 'CART_02', user_id: 'GUEST_002',
-    status: 'completed', started_at: '2026-11-05 10:15:00', ended_at: '2026-11-05 10:52:00',
-    item_count: 4, subtotal: 23.75, sale_id: 'DEMO_SALE_002',
-    items: [
-      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 2, unit_price_at_addition: 2.99, subtotal: 5.98 },
-      { product_id: 'PROD-006', name: 'Organic Trail Mix 200g', category: 'Snacks', quantity: 2, unit_price_at_addition: 4.79, subtotal: 9.58 },
-      { product_id: 'PROD-010', name: 'Protein Whey Crisp Bar', category: 'Snacks', quantity: 2, unit_price_at_addition: 3.29, subtotal: 6.58 }
-    ]
-  },
-  {
-    session_id: 'DEMO_SESS_001', cart_id: 'CART_03', user_id: 'GUEST_001',
-    status: 'completed', started_at: '2026-11-05 09:00:00', ended_at: '2026-11-05 09:38:00',
-    item_count: 5, subtotal: 71.95, sale_id: 'DEMO_SALE_001',
-    items: [
-      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price_at_addition: 39.99, subtotal: 39.99 },
-      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 1, unit_price_at_addition: 24.99, subtotal: 24.99 },
-      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 2, unit_price_at_addition: 3.99, subtotal: 7.98 }
-    ]
-  },
-  {
-    session_id: 'DEMO_SESS_000', cart_id: 'CART_01', user_id: null,
-    status: 'cancelled', started_at: '2026-11-04 17:30:00', ended_at: '2026-11-04 17:35:00',
-    item_count: 0, subtotal: 0, sale_id: null, items: []
-  }
-];
 
 async function loadSessionsData() {
   if (isDemoMode) {
@@ -289,42 +490,6 @@ async function loadSessionsData() {
   }
 }
 
-// Demo sales — deterministic mock data for demonstration mode
-const DEMO_SALES_DATA = [
-  {
-    sale_id: 'DEMO_SALE_001', session_id: 'DEMO_SESS_001',
-    subtotal: 71.95, tax_rate: 0.0825, tax_amount: 5.94, total: 77.89,
-    item_count: 4, completed_at: '2026-11-05 09:38:00',
-    lineItems: [
-      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 1, unit_price: 39.99, line_subtotal: 39.99 },
-      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 1, unit_price: 24.99, line_subtotal: 24.99 },
-      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 2, unit_price: 3.99, line_subtotal: 7.98 }
-    ]
-  },
-  {
-    sale_id: 'DEMO_SALE_002', session_id: 'DEMO_SESS_002',
-    subtotal: 22.14, tax_rate: 0.0825, tax_amount: 1.83, total: 23.97,
-    item_count: 6, completed_at: '2026-11-05 10:52:00',
-    lineItems: [
-      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 2, unit_price: 2.99, line_subtotal: 5.98 },
-      { product_id: 'PROD-006', name: 'Organic Trail Mix 200g', category: 'Snacks', quantity: 2, unit_price: 4.79, line_subtotal: 9.58 },
-      { product_id: 'PROD-010', name: 'Protein Whey Crisp Bar', category: 'Snacks', quantity: 2, unit_price: 3.29, line_subtotal: 6.58 }
-    ]
-  },
-  {
-    sale_id: 'DEMO_SALE_003', session_id: null,
-    subtotal: 4892.90, tax_rate: 0.0825, tax_amount: 403.67, total: 5296.57,
-    item_count: 412, completed_at: '2026-11-04 16:00:00',
-    lineItems: [
-      { product_id: 'PROD-004', name: 'Wireless Earbuds', category: 'Electronics', quantity: 48, unit_price: 39.99, line_subtotal: 1919.52 },
-      { product_id: 'PROD001', name: 'Smart Water Bottle', category: 'Accessories', quantity: 34, unit_price: 19.99, line_subtotal: 679.66 },
-      { product_id: 'PROD002', name: 'Organic Granola Bar', category: 'Snacks', quantity: 62, unit_price: 2.49, line_subtotal: 154.38 },
-      { product_id: 'PROD-005', name: 'Cold Brew Coffee 330ml', category: 'Beverages', quantity: 55, unit_price: 3.99, line_subtotal: 219.45 },
-      { product_id: 'PROD-008', name: 'Electrolyte Energy Drink', category: 'Beverages', quantity: 72, unit_price: 2.99, line_subtotal: 215.28 },
-      { product_id: 'PROD-009', name: 'Bluetooth Tracker Tag', category: 'Electronics', quantity: 22, unit_price: 24.99, line_subtotal: 549.78 }
-    ]
-  }
-];
 
 async function loadSalesData() {
   if (isDemoMode) {
@@ -356,9 +521,13 @@ async function loadSalesData() {
 }
 
 async function loadExpiryData() {
+  if (isDemoMode) {
+    expiryData = DEMO_EXPIRY_DATA.items || [];
+    renderExpirySection();
+    return;
+  }
   try {
-    const demoQuery = isDemoMode ? '?demo=true' : '';
-    const res = await fetchWithAuth(`${API_BASE}/admin/expiry${demoQuery}`);
+    const res = await fetchWithAuth(`${API_BASE}/admin/expiry`);
     const data = await res.json();
     if (data.success) {
       expiryData = data.items || [];
@@ -370,9 +539,13 @@ async function loadExpiryData() {
 }
 
 async function loadForecastData() {
+  if (isDemoMode) {
+    forecastData = DEMO_FORECAST_DATA.forecast || [];
+    renderForecastSection();
+    return;
+  }
   try {
-    const demoQuery = isDemoMode ? `?demo=true&window=${forecastWindowDays}` : `?window=${forecastWindowDays}`;
-    const res = await fetchWithAuth(`${API_BASE}/admin/demand-forecast${demoQuery}`);
+    const res = await fetchWithAuth(`${API_BASE}/admin/demand-forecast?window=${forecastWindowDays}`);
     const data = await res.json();
     if (data.success) {
       forecastData = data.forecast || [];
@@ -384,9 +557,13 @@ async function loadForecastData() {
 }
 
 async function loadMarketBasketData() {
+  if (isDemoMode) {
+    basketData = DEMO_BASKET_DATA;
+    renderMarketBasketSection();
+    return;
+  }
   try {
-    const demoQuery = isDemoMode ? '?demo=true' : '';
-    const res = await fetchWithAuth(`${API_BASE}/admin/market-basket${demoQuery}`);
+    const res = await fetchWithAuth(`${API_BASE}/admin/market-basket`);
     const data = await res.json();
     if (data.success) {
       basketData = data;
@@ -398,9 +575,14 @@ async function loadMarketBasketData() {
 }
 
 async function loadAnalyticsData() {
+  if (isDemoMode) {
+    analyticsData = DEMO_ANALYTICS_DATA;
+    renderAllCharts();
+    renderDashboardCharts();
+    return;
+  }
   try {
-    const demoQuery = isDemoMode ? '?demo=true' : '';
-    const res = await fetchWithAuth(`${API_BASE}/admin/analytics${demoQuery}`);
+    const res = await fetchWithAuth(`${API_BASE}/admin/analytics`);
     const data = await res.json();
     if (data.success) {
       analyticsData = data;
@@ -1764,6 +1946,11 @@ function setupForms() {
   if (prodForm) {
     prodForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isDemoMode) {
+        showToast('Simulation: Product creation/editing is disabled in Demo Mode', 'info');
+        closeModal('modal-product');
+        return;
+      }
       const isEdit = document.getElementById('prod-form-is-edit').value === 'true';
       const prodId = document.getElementById('prod-id').value.trim();
 
@@ -1841,6 +2028,11 @@ function setupForms() {
 
     restockForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isDemoMode) {
+        showToast('Simulation: Inbound stock modifications are disabled in Demo Mode', 'info');
+        closeModal('modal-restock');
+        return;
+      }
       const mode = modeInput.value;
       const productId = document.getElementById('restock-product-select').value;
       const quantity = parseInt(document.getElementById('restock-qty').value, 10);
@@ -1888,6 +2080,11 @@ function setupForms() {
 
     countForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isDemoMode) {
+        showToast('Simulation: Physical count audit is disabled in Demo Mode', 'info');
+        closeModal('modal-cycle-count');
+        return;
+      }
       const productId = document.getElementById('count-product-select').value;
       const countedQty = parseInt(document.getElementById('count-physical-input').value, 10);
       const reason = document.getElementById('count-reason').value;
@@ -1919,6 +2116,11 @@ function setupForms() {
 
     threshForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isDemoMode) {
+        showToast('Simulation: Threshold updates are disabled in Demo Mode', 'info');
+        closeModal('modal-thresholds');
+        return;
+      }
       const productId = document.getElementById('thresh-product-select').value;
       const reorderLevel = parseInt(document.getElementById('thresh-reorder').value, 10);
       const safetyStock = parseInt(document.getElementById('thresh-safety').value, 10);
@@ -1950,6 +2152,11 @@ function setupForms() {
   if (promoForm) {
     promoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isDemoMode) {
+        showToast('Simulation: Promotions cannot be saved to database in Demo Mode', 'info');
+        closeModal('modal-promotion');
+        return;
+      }
       const productId = document.getElementById('promo-product-select').value;
       const discountPercent = parseFloat(document.getElementById('promo-discount-input').value);
       const reason = document.getElementById('promo-reason-input').value.trim();
@@ -2096,12 +2303,38 @@ function setupNavigation() {
   const btnDemo = document.getElementById('btn-mode-demo');
   const demoBanner = document.getElementById('demo-banner-pill');
 
+  function updateModeIndicatorUI() {
+    const modeLabel = document.getElementById('mode-label-text');
+    const liveStatusText = document.getElementById('live-status-text');
+    if (isDemoMode) {
+      btnDemo?.classList.add('active', 'demo');
+      btnLive?.classList.remove('active');
+      if (demoBanner) demoBanner.classList.remove('hidden');
+      if (modeLabel) {
+        modeLabel.textContent = 'DEMO DATA – SIMULATED';
+        modeLabel.style.background = '#fffbeb';
+        modeLabel.style.border = '1px solid #fde68a';
+        modeLabel.style.color = '#b45309';
+      }
+      if (liveStatusText) liveStatusText.textContent = 'Simulated';
+    } else {
+      btnLive?.classList.add('active');
+      btnDemo?.classList.remove('active', 'demo');
+      if (demoBanner) demoBanner.classList.add('hidden');
+      if (modeLabel) {
+        modeLabel.textContent = 'LIVE DATABASE DATA';
+        modeLabel.style.background = '#f0fdf4';
+        modeLabel.style.border = '1px solid #bbf7d0';
+        modeLabel.style.color = '#15803d';
+      }
+      if (liveStatusText) liveStatusText.textContent = 'Live Sync';
+    }
+  }
+
   btnLive?.addEventListener('click', () => {
     isDemoMode = false;
     localStorage.setItem('trackcart_demo_mode', 'false');
-    btnLive.classList.add('active');
-    btnDemo.classList.remove('active');
-    if (demoBanner) demoBanner.classList.add('hidden');
+    updateModeIndicatorUI();
     showToast('Switched to Live PostgreSQL Database', 'info');
     refreshAllData();
   });
@@ -2109,23 +2342,13 @@ function setupNavigation() {
   btnDemo?.addEventListener('click', () => {
     isDemoMode = true;
     localStorage.setItem('trackcart_demo_mode', 'true');
-    btnDemo.classList.add('active', 'demo');
-    btnLive.classList.remove('active');
-    if (demoBanner) demoBanner.classList.remove('hidden');
+    updateModeIndicatorUI();
     showToast('Switched to Demo Analytics Simulation Mode', 'info');
     refreshAllData();
   });
 
   // Apply persisted mode visual indicator immediately on page load
-  if (isDemoMode) {
-    btnDemo?.classList.add('active', 'demo');
-    btnLive?.classList.remove('active');
-    if (demoBanner) demoBanner.classList.remove('hidden');
-  } else {
-    btnLive?.classList.add('active');
-    btnDemo?.classList.remove('active');
-    if (demoBanner) demoBanner.classList.add('hidden');
-  }
+  updateModeIndicatorUI();
 
   // Inventory Filters
   document.getElementById('inv-search-input')?.addEventListener('input', (e) => {
