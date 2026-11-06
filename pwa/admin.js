@@ -1946,11 +1946,6 @@ function setupForms() {
   if (prodForm) {
     prodForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isDemoMode) {
-        showToast('Simulation: Product creation/editing is disabled in Demo Mode', 'info');
-        closeModal('modal-product');
-        return;
-      }
       const isEdit = document.getElementById('prod-form-is-edit').value === 'true';
       const prodId = document.getElementById('prod-id').value.trim();
 
@@ -2028,11 +2023,6 @@ function setupForms() {
 
     restockForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isDemoMode) {
-        showToast('Simulation: Inbound stock modifications are disabled in Demo Mode', 'info');
-        closeModal('modal-restock');
-        return;
-      }
       const mode = modeInput.value;
       const productId = document.getElementById('restock-product-select').value;
       const quantity = parseInt(document.getElementById('restock-qty').value, 10);
@@ -2080,11 +2070,6 @@ function setupForms() {
 
     countForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isDemoMode) {
-        showToast('Simulation: Physical count audit is disabled in Demo Mode', 'info');
-        closeModal('modal-cycle-count');
-        return;
-      }
       const productId = document.getElementById('count-product-select').value;
       const countedQty = parseInt(document.getElementById('count-physical-input').value, 10);
       const reason = document.getElementById('count-reason').value;
@@ -2116,11 +2101,6 @@ function setupForms() {
 
     threshForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isDemoMode) {
-        showToast('Simulation: Threshold updates are disabled in Demo Mode', 'info');
-        closeModal('modal-thresholds');
-        return;
-      }
       const productId = document.getElementById('thresh-product-select').value;
       const reorderLevel = parseInt(document.getElementById('thresh-reorder').value, 10);
       const safetyStock = parseInt(document.getElementById('thresh-safety').value, 10);
@@ -2152,11 +2132,6 @@ function setupForms() {
   if (promoForm) {
     promoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isDemoMode) {
-        showToast('Simulation: Promotions cannot be saved to database in Demo Mode', 'info');
-        closeModal('modal-promotion');
-        return;
-      }
       const productId = document.getElementById('promo-product-select').value;
       const discountPercent = parseFloat(document.getElementById('promo-discount-input').value);
       const reason = document.getElementById('promo-reason-input').value.trim();
@@ -2303,38 +2278,12 @@ function setupNavigation() {
   const btnDemo = document.getElementById('btn-mode-demo');
   const demoBanner = document.getElementById('demo-banner-pill');
 
-  function updateModeIndicatorUI() {
-    const modeLabel = document.getElementById('mode-label-text');
-    const liveStatusText = document.getElementById('live-status-text');
-    if (isDemoMode) {
-      btnDemo?.classList.add('active', 'demo');
-      btnLive?.classList.remove('active');
-      if (demoBanner) demoBanner.classList.remove('hidden');
-      if (modeLabel) {
-        modeLabel.textContent = 'DEMO DATA – SIMULATED';
-        modeLabel.style.background = '#fffbeb';
-        modeLabel.style.border = '1px solid #fde68a';
-        modeLabel.style.color = '#b45309';
-      }
-      if (liveStatusText) liveStatusText.textContent = 'Simulated';
-    } else {
-      btnLive?.classList.add('active');
-      btnDemo?.classList.remove('active', 'demo');
-      if (demoBanner) demoBanner.classList.add('hidden');
-      if (modeLabel) {
-        modeLabel.textContent = 'LIVE DATABASE DATA';
-        modeLabel.style.background = '#f0fdf4';
-        modeLabel.style.border = '1px solid #bbf7d0';
-        modeLabel.style.color = '#15803d';
-      }
-      if (liveStatusText) liveStatusText.textContent = 'Live Sync';
-    }
-  }
-
   btnLive?.addEventListener('click', () => {
     isDemoMode = false;
     localStorage.setItem('trackcart_demo_mode', 'false');
-    updateModeIndicatorUI();
+    btnLive.classList.add('active');
+    btnDemo.classList.remove('active');
+    if (demoBanner) demoBanner.classList.add('hidden');
     showToast('Switched to Live PostgreSQL Database', 'info');
     refreshAllData();
   });
@@ -2342,13 +2291,23 @@ function setupNavigation() {
   btnDemo?.addEventListener('click', () => {
     isDemoMode = true;
     localStorage.setItem('trackcart_demo_mode', 'true');
-    updateModeIndicatorUI();
+    btnDemo.classList.add('active', 'demo');
+    btnLive.classList.remove('active');
+    if (demoBanner) demoBanner.classList.remove('hidden');
     showToast('Switched to Demo Analytics Simulation Mode', 'info');
     refreshAllData();
   });
 
   // Apply persisted mode visual indicator immediately on page load
-  updateModeIndicatorUI();
+  if (isDemoMode) {
+    btnDemo?.classList.add('active', 'demo');
+    btnLive?.classList.remove('active');
+    if (demoBanner) demoBanner.classList.remove('hidden');
+  } else {
+    btnLive?.classList.add('active');
+    btnDemo?.classList.remove('active');
+    if (demoBanner) demoBanner.classList.add('hidden');
+  }
 
   // Inventory Filters
   document.getElementById('inv-search-input')?.addEventListener('input', (e) => {
