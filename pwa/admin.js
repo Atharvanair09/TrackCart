@@ -651,17 +651,18 @@ function renderDashboard() {
   // Render Today's Priorities
   const prioGrid = document.getElementById('dashboard-priorities-grid');
   if (prioGrid) {
-    prioGrid.innerHTML = priorities.map(p => `
-      <div class="priority-card" data-jump-tab="${p.targetTab || 'inventory'}" data-jump-id="${p.targetId || ''}">
-        <div>
+    const displayPriorities = priorities.slice(0, 3);
+    prioGrid.innerHTML = displayPriorities.map(p => `
+      <div class="priority-card priority-${p.type || 'general'}" data-jump-tab="${p.targetTab || 'inventory'}" data-jump-id="${p.targetId || ''}">
+        <div class="priority-card-body">
           <div class="priority-card-top">
-            <span class="priority-type-pill ${p.type}">${p.badge}</span>
+            <span class="priority-type-pill ${p.type || ''}">${p.badge || 'Priority'}</span>
           </div>
-          <h4>${p.title}</h4>
-          <p>${p.subtitle}</p>
+          <h4 title="${p.title || ''}">${p.title || ''}</h4>
+          <p title="${p.subtitle || ''}">${p.subtitle || ''}</p>
         </div>
         <div class="priority-action-link">
-          ${p.actionLabel || 'Take Action'} &rarr;
+          <span>${p.actionLabel || 'Take Action'}</span> &rarr;
         </div>
       </div>
     `).join('');
@@ -2162,6 +2163,7 @@ function setupForms() {
 // ==========================================
 function switchTab(tabId) {
   currentTab = tabId;
+  document.body.classList.toggle('dashboard-view-active', tabId === 'dashboard');
 
   // Update Top Tab buttons
   document.querySelectorAll('#admin-main-nav .nav-tab').forEach(tab => {
